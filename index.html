@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>満員電車に乗り込め | 主観で押し込む3Dバカゲー</title>
+<meta name="description" content="発車まで30秒、満員電車に一人称で乗り込む3Dのバカゲー。背中を押して隙間を作り、閉まるドアに挟まると「駆け込み乗車はおやめください」で弾き出される。スマホのブラウザで無料で遊べる電車に乗り込むゲーム。">
+<meta property="og:type" content="website">
+<meta property="og:title" content="満員電車に乗り込め">
+<meta property="og:description" content="発車まで30秒。目の前は背中とリュック。押して押して満員電車に乗り込む主観の3Dバカゲー。スマホで遊べる。">
+<meta property="og:image" content="https://tom3games.github.io/rush-hour-train/og.png?v=1">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:url" content="https://tom3games.github.io/rush-hour-train/">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#16794f">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DotGothic16&family=M+PLUS+1p:wght@500;800;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css?v=1">
+<script type="importmap">{ "imports": { "three": "./vendor/three.module.js" } }</script>
+</head>
+<body>
+<!-- 読み込み中: 駅の電光掲示板。進み具合は本物の読み込みに合わせる -->
+<div id="loading">
+  <div class="board">
+    <div class="board-row"><span class="kind">各停</span><span id="loadText" class="board-text">まもなく電車が参ります</span></div>
+    <div class="dots" aria-hidden="true"><i id="loadBar"></i></div>
+  </div>
+  <svg class="rails" viewBox="0 0 320 40" aria-hidden="true">
+    <path d="M0 30H320M0 36H320" stroke="#5d5a55" stroke-width="2"/>
+    <g fill="#4a4743"><rect x="6" y="28" width="6" height="10"/><rect x="40" y="28" width="6" height="10"/><rect x="74" y="28" width="6" height="10"/><rect x="108" y="28" width="6" height="10"/><rect x="142" y="28" width="6" height="10"/><rect x="176" y="28" width="6" height="10"/><rect x="210" y="28" width="6" height="10"/><rect x="244" y="28" width="6" height="10"/><rect x="278" y="28" width="6" height="10"/><rect x="312" y="28" width="6" height="10"/></g>
+    <circle class="headlight" cx="0" cy="22" r="4" fill="#fff6c8"/>
+  </svg>
+</div>
+
+<div id="squeeze"><div id="view"></div></div>
+<div id="fxPerfume"></div><div id="fxVig"></div><div id="fxFlash"></div>
+
+<!-- 遊び中 -->
+<section id="hud" class="hidden">
+  <div class="led" id="led"><span class="led-text" id="ledText"></span><b class="led-sec" id="ledSec"></b></div>
+  <div id="say" class="say hidden"></div>
+  <div id="touch" class="touch hidden">
+    <div id="stickZone" class="stickzone"><div id="stick" class="stick hidden"><div class="knob"></div></div></div>
+    <button id="btnPush" class="push" aria-label="push">
+      <svg viewBox="0 0 64 64"><path d="M20 58c-5-6-11-15-13-22-1-3 3-5 5-3l6 7V12c0-3 4-3 4 0v18h2V8c0-3 4-3 4 0v22h2V10c0-3 4-3 4 0v20h2V15c0-3 4-3 4 0v25c0 9-3 14-6 18z" fill="#fbfbf8" stroke="#2a2a2a" stroke-width="2.4" stroke-linejoin="round"/><path d="M20 58h18" stroke="#2a2a2a" stroke-width="2.4"/></svg>
+    </button>
+  </div>
+  <button id="btnQuit" class="quit" aria-label="quit"><svg viewBox="0 0 20 20"><path d="M5 5l10 10M15 5L5 15" stroke="#fff" stroke-width="2.4"/></svg></button>
+</section>
+
+<!-- タイトル: 駅名標 -->
+<section id="title" class="screen hidden">
+  <div class="ekimei">
+    <p class="ruby" data-t="titleRuby"></p>
+    <h1 data-t="title"></h1>
+    <div class="band"><span data-t="prev"></span><span data-t="next"></span></div>
+  </div>
+  <p class="sub" data-t="sub"></p>
+  <div class="title-actions">
+    <button id="btnStart" class="go" data-t="start"></button>
+    <button id="btnHow" class="text-btn" data-t="howBtn"></button>
+  </div>
+  <nav class="foot">
+    <button id="btnLang" class="mini" data-t="lang"></button>
+    <button id="btnMute" class="mini"></button>
+    <a class="mini" href="https://tom3games.github.io/" data-t="more"></a>
+  </nav>
+</section>
+
+<!-- 遊び方: 駅の掲示物 -->
+<section id="how" class="screen hidden">
+  <div class="notice">
+    <h2 data-t="howTitle"></h2>
+    <ol id="howList"></ol>
+    <p class="keys" id="howKeys"></p>
+    <button id="btnOk" class="go small" data-t="ok"></button>
+    <p class="credit" data-t="credit"></p>
+  </div>
+</section>
+
+<!-- 結果: 定期券 か 遅延証明書 -->
+<section id="result" class="screen hidden">
+  <canvas id="ticket"></canvas>
+  <div class="result-actions">
+    <button id="btnAgain" class="go small" data-t="again"></button>
+    <div class="row">
+      <a id="btnPost" class="mini" target="_blank" rel="noopener" data-t="post"></a>
+      <button id="btnSave" class="mini" data-t="save"></button>
+      <button id="btnTitle" class="mini" data-t="toTitle"></button>
+    </div>
+  </div>
+</section>
+
+<script>
+// 拡大を止める（ピンチ・ダブルタップ・Ctrl+ホイール/キー）。iOS は user-scalable=no を無視するので JS でも止める
+(function(){
+  var opt={passive:false};
+  ['gesturestart','gesturechange','gestureend'].forEach(function(n){document.addEventListener(n,function(e){e.preventDefault()},opt)});
+  document.addEventListener('touchmove',function(e){if(e.touches&&e.touches.length>1)e.preventDefault()},opt);
+  var last=0;document.addEventListener('touchend',function(e){var n=Date.now();if(n-last<300&&!(e.target.closest&&e.target.closest('button,a')))e.preventDefault();last=n},opt);
+  document.addEventListener('dblclick',function(e){e.preventDefault()},opt);
+  window.addEventListener('wheel',function(e){if(e.ctrlKey)e.preventDefault()},opt);
+  window.addEventListener('keydown',function(e){if((e.ctrlKey||e.metaKey)&&['+','-','=','0',';'].indexOf(e.key)>=0)e.preventDefault()});
+})();
+// 起動失敗の保険。読み込みが終わっても window.__rhReady が立たなければ原因と UA を画面に出す
+(function(){
+  var errs=[];
+  window.addEventListener('error',function(e){errs.push((e.message||'error')+' @'+(e.filename||'')+':'+(e.lineno||''))});
+  window.addEventListener('unhandledrejection',function(e){errs.push('reject: '+(e.reason&&e.reason.message||e.reason))});
+  setTimeout(function(){
+    if(window.__rhReady) return;
+    var d=document.createElement('div');d.id='boot-err';
+    d.textContent='起動できませんでした / failed to start\n'+(errs.join('\n')||'(no error captured)')+'\n'+navigator.userAgent;
+    document.body.appendChild(d);
+  },15000);
+})();
+</script>
+<script src="data.js?v=1"></script>
+<script src="sfx.js?v=1"></script>
+<script type="module" src="js/game.js?v=1"></script>
+</body>
+</html>

@@ -1,0 +1,27 @@
+- snd/amb_platform.mp3: Crowd Shouting/Speaking Ambience / StarNinjas / CC0
+- snd/amb_ride.mp3: File:Dubai Metro Burj Khalifa.ogg / recorded by A.Savin / Public domain
+- snd/bell.mp3: File:WWS Signalbell.ogg / Work With Sounds / Konrad Gutkowski / CC BY 4.0
+- snd/doors.mp3: File:London Underground 1995 Stock train doors closing.ogg / Philt3r / CC BY 4.0
+- snd/depart.mp3: File:London Underground 1996 Stock train departing a station.ogg / Philt3r / CC BY 4.0
+- snd/chime.mp3: File:Taiwan Railway Station Arrival Sound 20221115 180616.wav / Lexcie / CC0
+- snd/cloth1.mp3: 50 RPG sound effects / Kenney / CC0
+- snd/cloth2.mp3: 50 RPG sound effects / Kenney / CC0
+- snd/cloth3.mp3: 50 RPG sound effects / Kenney / CC0
+- snd/cloth4.mp3: 50 RPG sound effects / Kenney / CC0
+- snd/grunt1.mp3: Little Grunts / crueltyinc / CC0
+- snd/grunt2.mp3: Little Grunts / crueltyinc / CC0
+- snd/grunt3.mp3: Little Grunts / crueltyinc / CC0
+- snd/slam1.mp3: 100 CC0 SFX / rubberduck / CC0
+- snd/slam2.mp3: 100 CC0 SFX / rubberduck / CC0
+- snd/metal1.mp3: 75 CC0 breaking / falling / hit sfx / rubberduck / CC0
+- snd/thud1.mp3: 75 CC0 breaking / falling / hit sfx / rubberduck / CC0
+- snd/thud2.mp3: 75 CC0 breaking / falling / hit sfx / rubberduck / CC0
+- snd/step1.mp3: 50 RPG sound effects / Kenney / CC0
+- snd/step2.mp3: 50 RPG sound effects / Kenney / CC0
+- snd/step3.mp3: 50 RPG sound effects / Kenney / CC0
+- snd/win.mp3: 85 Short music jingles / Kenney / CC0
+- snd/lose.mp3: 85 Short music jingles / Kenney / CC0
+- snd/click.mp3: Interface Sounds / Kenney / CC0
+- snd/click.mp3: Interface Sounds / Kenney / CC0
+- assets/chars/*.glb: Kenney Mini Characters / Kenney / CC0（License-kenney.txt）
+- vendor/three.module.js ほか: three.js / MIT
