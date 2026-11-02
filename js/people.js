@@ -5,7 +5,7 @@ import { GLTFLoader } from '../vendor/jsm/loaders/GLTFLoader.js'
 import { clone as skClone } from '../vendor/jsm/utils/SkeletonUtils.js'
 
 const BASE = 'assets/chars/'
-const FILES = ['male-a', 'male-b', 'male-c', 'male-d', 'male-e', 'male-f', 'female-a', 'female-b', 'female-c', 'female-d', 'female-e', 'female-f']
+const FILES = ['male-a', 'male-b', 'male-c', 'male-d', 'male-f', 'female-b', 'female-c', 'female-d', 'female-e', 'female-f']
 const BLACK_HAIR = ['male-d', 'female-d', 'female-b']
 const A = { src: {}, clips: null, acc: {}, ready: false }
 export const assets = A
@@ -27,7 +27,7 @@ export function loadPeople(manager) {
       })
       if (!A.clips) { A.clips = {}; for (const c of g.animations) A.clips[c.name] = c }
     })
-    A.acc.sunglasses = rs[12].scene; A.acc.glasses = rs[13].scene; A.acc.mask = rs[14].scene
+    const n = FILES.length; A.acc.sunglasses = rs[n].scene; A.acc.glasses = rs[n + 1].scene; A.acc.mask = rs[n + 2].scene
     A.ready = true
   })
 }
