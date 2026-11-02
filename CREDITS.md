@@ -1,5 +1,4 @@
 - snd/amb_platform.mp3: Crowd Shouting/Speaking Ambience / StarNinjas / CC0
-- snd/amb_ride.mp3: File:Dubai Metro Burj Khalifa.ogg / recorded by A.Savin / Public domain
 - snd/bell.mp3: File:WWS Signalbell.ogg / Work With Sounds / Konrad Gutkowski / CC BY 4.0
 - snd/doors.mp3: File:London Underground 1995 Stock train doors closing.ogg / Philt3r / CC BY 4.0
 - snd/depart.mp3: File:London Underground 1996 Stock train departing a station.ogg / Philt3r / CC BY 4.0
