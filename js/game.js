@@ -1,8 +1,8 @@
-// 満員電車に乗り込め（主観）。押し合いは phys.js（前作の 2D Verlet）、表示はここで three.js の一人称にする
+// 満員電車に乗り込め。押し合いは phys.js（前作の 2D Verlet）、表示はここで three.js の斜め後ろ視点にする（v2。初版は主観）
 import * as THREE from 'three'
-import { World, T as PT, STEP, ROUND, CAR, GC, mid, botInput } from './phys.js?v=1'
-import { buildWorld, S, wx, wz } from './world.js?v=1'
-import { loadPeople, lookOf, Pool, Person, assets } from './people.js?v=1'
+import { World, T as PT, STEP, ROUND, CAR, GC, mid, botInput } from './phys.js?v=2'
+import { buildWorld, S, wx, wz } from './world.js?v=2'
+import { loadPeople, lookOf, Pool, Person, assets } from './people.js?v=2'
 
 const $ = id => document.getElementById(id)
 const TX = window.RH_TEXT, LINES = window.RH_LINES
@@ -38,24 +38,10 @@ $('loadText').textContent = t('loading')
 const W = buildWorld(scene, { low: LOW })
 const pool = new Pool(scene, SXZ, SY)
 
-// 自分の手（主観）。紺のスーツの袖・白いシャツの袖口・手
-const hands = new THREE.Group(); camera.add(hands)
-const handParts = []
-for (const s of [-1, 1]) {
-  const g = new THREE.Group()
-  const sleeve = new THREE.Mesh(new THREE.CylinderGeometry(0.052, 0.062, 0.42, 12), new THREE.MeshStandardMaterial({ color: 0x252d3d, roughness: 0.9 }))
-  sleeve.rotation.x = Math.PI / 2; sleeve.position.z = 0.2; g.add(sleeve)
-  const cuff = new THREE.Mesh(new THREE.CylinderGeometry(0.047, 0.047, 0.03, 12), new THREE.MeshStandardMaterial({ color: 0xf2f2ee }))
-  cuff.rotation.x = Math.PI / 2; cuff.position.z = -0.01; g.add(cuff)
-  const palm = new THREE.Mesh(new THREE.CapsuleGeometry(0.042, 0.05, 4, 10), new THREE.MeshStandardMaterial({ color: 0xe8b996, roughness: 0.7 }))
-  palm.scale.set(1.15, 1.2, 0.55); palm.position.set(0, 0.03, -0.06); palm.rotation.x = -0.2; g.add(palm)
-  g.scale.setScalar(0.62); g.userData.s = s; hands.add(g); handParts.push(g)
-}
-
 // 座っている人（座席の上。電車と一緒に動く）
 const seated = []
 function placeSeated() {
-  const looks = ['female-b', 'male-d', 'female-d', 'female-e', 'male-f', 'female-b', 'male-d', 'female-d', 'male-f', 'female-e']
+  const looks = ['female-f', 'male-d', 'female-d', 'female-e', 'male-f', 'female-e', 'male-d', 'female-d', 'male-f', 'female-e']
   for (let i = 0; i < looks.length; i++) {
     const p = new Person({ key: 'seat' + i, file: looks[i], tint: [0xffffff, 0xd8dce4, 0xc8ccd6][i % 3] }, SXZ, SY)
     p.play('sit', 0); p.mixer.update(0.5 + i * 0.13)
@@ -94,7 +80,7 @@ function bubble(body, line, cls = '') {
 const pickLine = (kind, n) => { const a = LINES[lang][kind] || LINES[lang].commuter; return a[n % a.length] }
 
 // ---------------------------------------------------------------- 入力
-const keys = new Set(); let pushBuf = 0
+const keys = new Set(); let pushBuf = 0, grabOn = false
 const stick = { x: 0, y: 0, id: null, ox: 0, oy: 0 }
 addEventListener('keydown', e => {
   if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault()
@@ -118,6 +104,10 @@ sz.addEventListener('pointerup', stickEnd); sz.addEventListener('pointercancel',
 const bp = $('btnPush')
 bp.addEventListener('pointerdown', e => { e.preventDefault(); audioOn(); if (mode === 'play') pushBuf = 40; bp.classList.add('on') })
 for (const n of ['pointerup', 'pointercancel', 'pointerleave']) bp.addEventListener(n, () => bp.classList.remove('on'))
+// つかむ: スマホはスイッチ式（1回でつかむ・もう1回で離す。離した時に進んでいれば投げる）。PC は G か Shift を押している間
+const bg = $('btnGrab')
+function setGrab(on) { grabOn = on; bg.classList.toggle('on', on) }
+bg.addEventListener('pointerdown', e => { e.preventDefault(); audioOn(); if (mode === 'play') setGrab(!grabOn) })
 
 function gather() {
   if (testInput) return testInput
@@ -130,7 +120,8 @@ function gather() {
   const p = w.player, ready = p.shoveCd <= 0
   const shove = pushBuf > 0 && ready
   if (shove) pushBuf = 0
-  return { x: rx * sx + fx * sy, y: rz * sx + fz * sy, shove, face: { x: fx, y: fz } }
+  const grab = grabOn || keys.has('KeyG') || keys.has('ShiftLeft') || keys.has('ShiftRight')
+  return { x: rx * sx + fx * sy, y: rz * sx + fz * sy, shove, grab, face: { x: fx, y: fz } }
 }
 
 // ---------------------------------------------------------------- 1回の流れ
@@ -144,7 +135,7 @@ function start(seed, opts) {
   audioOn()
   newWorld(seed, opts)
   mode = 'play'; paused = false; hitStop = fovKick = shake = flashA = squeezeK = knock = glance = 0; camYaw = 0; pushedEver = false; moved = false; resultAt = 0; hintShown = false
-  say.t = 0; say.body = null; say.el.classList.add('hidden'); annT = 0; $('fxFlash').classList.remove('red'); pushBuf = 0
+  say.t = 0; say.body = null; say.el.classList.add('hidden'); annT = 0; $('fxFlash').classList.remove('red'); pushBuf = 0; setGrab(false)
   show(null); $('hud').classList.remove('hidden'); $('touch').classList.toggle('hidden', !coarse)
   announce('start', 2.6)
   sfx('click', { vol: 0.5 })
@@ -165,6 +156,21 @@ function onEvent(e) {
       }
       break
     }
+    case 'grab': {
+      pushedEver = true
+      const o = e.target
+      sfx('cloth', { vol: 0.8, rate: 0.85 }); squeezeK = Math.max(squeezeK, 0.5); shake = Math.max(shake, 0.08)
+      if (o.sayCd <= 0 && bubble(o, pickLine('g_' + o.type, w.step + o.id), o.type === 'dufu' ? 'dufu' : '')) o.sayCd = 120
+      break
+    }
+    case 'release':
+      if (e.thrown) { sfx('thud', { vol: 0.8 }); sfx('grunt', { vol: 0.6, delay: 0.05 }); hitStop = Math.max(hitStop, 0.06); shake = Math.max(shake, 0.3); fovKick = -4 }
+      setGrab(false)
+      break
+    case 'grabFail':
+      if (e.target) bubble(e.target, pickLine(e.target.type === 'vip' ? 'g_vip' : 'g_staff', w.step))
+      setGrab(false)
+      break
     case 'yield': if (Math.random() < 0.5) bubble(e.b, pickLine('yield', e.b.id)); break
     case 'vip': announce('vip', 2.8); break
     case 'staff': announce('staff', 2.4); sfx('step', { vol: 0.6 }); break
@@ -205,99 +211,134 @@ const vis = new Map()   // body から Person
 const _v = new THREE.Vector3()
 let pickN = 0
 function choosePeople() {
-  const cx = camera.position.x, cz = camera.position.z, fx = -Math.sin(camYaw + glanceYaw()), fz = -Math.cos(camYaw + glanceYaw())
-  const off = w.trainX * S
+  // 自分のまわりから近い順（カメラは後ろにいるので、自分の位置で選ぶ）
+  const pm = mid(w.player), off = w.trainX * S
+  const px = wx(pm.x) + (w.player.core[0].frozen ? off : 0), pz = wz(pm.y)
   const arr = []
   for (const b of w.bodies) {
     if (b === w.player) continue
     const c = mid(b), x = wx(c.x) + (b.core[0].frozen ? off : 0), z = wz(c.y)
-    const dx = x - cx, dz = z - cz, d2 = dx * dx + dz * dz
-    const front = dx * fx + dz * fz
-    // 後ろの人は近くだけ。前は広く
-    const score = front < -0.6 ? d2 * 6 : d2
-    arr.push([score, b])
+    const dx = x - px, dz = z - pz
+    arr.push([dx * dx + dz * dz * 1.4, b])
   }
   arr.sort((a, b) => a[0] - b[0])
   const want = new Set(arr.slice(0, MAXV).map(a => a[1]))
-  for (const [b, p] of vis) if (!want.has(b)) { pool.give(p); vis.delete(b) }
+  for (const [b, p] of vis) if (!want.has(b)) { p.setFade(1); pool.give(p); vis.delete(b) }
   let rank = 0
   for (const [, b] of arr.slice(0, MAXV)) { if (!vis.has(b)) vis.set(b, pool.take(lookOf(b))); vis.get(b).rank = rank++ }
 }
+function poseBody(b, p, dt, frozenOff) {
+  const c = mid(b), g = p.group
+  g.position.set(wx(c.x) + frozenOff, 0, wz(c.y))
+  // 肩の線から向き（体の前）を出す
+  const sx = b.ls.x - b.rs.x, sy = b.ls.y - b.rs.y, sl = Math.hypot(sx, sy) || 1
+  g.rotation.y = Math.atan2(sy / sl, -sx / sl)
+  // 押されたら押された向きに傾く
+  const lx = Math.max(-0.3, Math.min(0.3, b.vx * 0.12)), lz = Math.max(-0.3, Math.min(0.3, b.vy * 0.12)), ry = g.rotation.y
+  p.lean.rotation.set(lx * Math.sin(ry) + lz * Math.cos(ry), 0, -(lx * Math.cos(ry) - lz * Math.sin(ry)))
+  // ふらついている（投げられた・離された）人は大きく揺れる
+  if (b.held > 4 && b !== w.player) p.lean.rotation.z += Math.sin(performance.now() / 110 + b.id) * 0.22
+}
+const _cp = new THREE.Vector3()
 function updatePeople(dt) {
   if (pickN++ % 4 === 0) choosePeople()
   const off = w.trainX * S
+  // カメラと自分の間にいる人・カメラに近い人は透かす（混んでいても自分とドアが見える）
+  const pm = mid(w.player), px = wx(pm.x) + (w.player.core[0].frozen ? off : 0), pz = wz(pm.y)
+  const cx = camera.position.x, cz = camera.position.z, sx = px - cx, sz = pz - cz, sl2 = sx * sx + sz * sz || 1
   for (const [b, p] of vis) {
-    const c = mid(b), g = p.group
-    g.position.set(wx(c.x) + (b.core[0].frozen ? off : 0), 0, wz(c.y))
-    // カメラが頭の中に入る近さの人は消す（画面が髪の毛一色になるのを防ぐ）
-    const hx = wx(b.head.x) + (b.core[0].frozen ? off : 0) - camera.position.x, hz = wz(b.head.y) - camera.position.z
-    g.visible = hx * hx + hz * hz > 0.42 * 0.42
-    // 肩の線から向き（体の前）を出す
-    const sx = b.ls.x - b.rs.x, sy = b.ls.y - b.rs.y, sl = Math.hypot(sx, sy) || 1
-    const fx = sy / sl, fy = -sx / sl
-    g.rotation.y = Math.atan2(fx, fy)
-    // 押されたら押された向きに傾く
-    const lx = Math.max(-0.3, Math.min(0.3, b.vx * 0.12)), lz = Math.max(-0.3, Math.min(0.3, b.vy * 0.12))
-    p.lean.rotation.set(lz * Math.cos(g.rotation.y) - lx * Math.sin(g.rotation.y) * 0, 0, 0)
-    p.lean.rotation.x = (lx * Math.sin(g.rotation.y) + lz * Math.cos(g.rotation.y))
-    p.lean.rotation.z = -(lx * Math.cos(g.rotation.y) - lz * Math.sin(g.rotation.y))
+    const fo = b.core[0].frozen ? off : 0
+    poseBody(b, p, dt, fo)
+    const gx = p.group.position.x - cx, gz = p.group.position.z - cz
+    const t = (gx * sx + gz * sz) / sl2, lat = Math.abs(gx * sz - gz * sx) / Math.sqrt(sl2)
+    let fade = 1
+    if (mode !== 'title' && t > -0.2 && t < 0.92 && lat < 0.75) fade = 0.2
+    if (gx * gx + gz * gz < 0.8) fade = 0
+    p.setFade(fade)
     const sp = Math.hypot(b.vx, b.vy)
     if (b.kind === 'staff' && b.pushing) p.play('holding-both')
+    else if (b.held > 4 && b !== w.player) p.play('emote-no')
     else if (sp > 0.55 && !b.core[0].frozen) p.play('walk')
     else p.play('idle')
     if (p.cur) p.cur.timeScale = b.type === 'sleep' ? 0.35 : 1
-    // 遠い人のアニメは間引く
-    const every = p.rank < 12 ? 1 : 3
+    const every = p.rank < 12 ? 1 : 3   // 遠い人のアニメは間引く
     p.acc += dt
     if ((pickN + b.id) % every === 0) { p.mixer.update(p.acc); p.acc = 0 }
     if (b.type === 'sleep' && p.bones.head) p.bones.head.rotation.x = 0.55 + Math.sin(performance.now() / 900) * 0.05
   }
+  // 自分
+  const me = w.player
+  if (!meModel) { meModel = new Person({ key: 'me', file: 'female-b', tint: 0xffffff }, SXZ, SY); scene.add(meModel.group); meModel.group.add(meRing) }
+  poseBody(me, meModel, dt, me.core[0].frozen ? off : 0)
+  meModel.group.visible = mode !== 'title'
+  if (me.shoveAnim > 0) meModel.play('attack-melee-right', 0.05)
+  else if (me.grab) meModel.play('holding-both', 0.12)
+  else if (Math.hypot(me.vx, me.vy) > 0.4) meModel.play('walk')
+  else meModel.play('idle')
+  meModel.mixer.update(dt * (me.shoveAnim > 0 ? 1.6 : 1))
+  meRing.material.opacity = 0.75 + Math.sin(performance.now() / 200) * 0.2
+  // つかんでいる人の足もとに輪
+  grabRing.visible = !!me.grab
+  grabMark.visible = !!me.grab
+  if (me.grab) { const c = mid(me.grab.target.body); grabRing.position.set(wx(c.x), 0.03, wz(c.y)); grabMark.position.set(wx(c.x), 1.85 + Math.sin(performance.now() / 120) * 0.04, wz(c.y)); grabMark.rotation.y += 0.05 }
 }
+let meModel = null
+const meRing = new THREE.Mesh(new THREE.RingGeometry(0.42, 0.55, 40).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0x2fd18a, transparent: true, opacity: 0.85, depthWrite: false, depthTest: false }))
+meRing.renderOrder = 20   // 人に隠れても自分の足もとが分かるように手前に描く
+meRing.position.y = 0.03
+const grabRing = new THREE.Mesh(new THREE.RingGeometry(0.42, 0.6, 40).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xff9a2a, transparent: true, opacity: 0.95, depthWrite: false }))
+grabRing.visible = false; scene.add(grabRing)
+// つかんでいる人の頭の上の目印（人に隠れないよう手前に描く）
+const grabMark = new THREE.Mesh(new THREE.ConeGeometry(0.13, 0.26, 4).rotateX(Math.PI), new THREE.MeshBasicMaterial({ color: 0xff9a2a, depthTest: false }))
+grabMark.renderOrder = 21; grabMark.visible = false; scene.add(grabMark)
 
-// ---------------------------------------------------------------- カメラ（主観）
-function glanceYaw() { return glance > 0 ? Math.sin(Math.min(1, glance) * Math.PI / 2) * Math.PI * 0.92 * (glance > 3.2 ? Math.max(0, 1 - (glance - 3.2)) : 1) : 0 }
+// ---------------------------------------------------------------- カメラ（自分の斜め後ろ・高め）
+const camPos = new THREE.Vector3(), camLook = new THREE.Vector3()
+let camInit = false
 function updateCamera(dt) {
-  const p = w.player, h = p.head, off = p.core[0].frozen ? w.trainX * S : 0
+  const p = w.player, off = p.core[0].frozen ? w.trainX * S : 0
   const asp = innerWidth / innerHeight
   // 向き: 押す向き・進む向きに少しだけ振る。大きくは回さない（いつもドアと車内が前）
-  const d = p.dir, want = Math.max(-0.42, Math.min(0.42, Math.atan2(-d.x, -d.y))) * 0.75
-  if (mode === 'play' || mode === 'result') camYaw += (want - camYaw) * (1 - Math.exp(-dt * 3.2))
-  if (glance > 0) glance += dt
-  // 弾き出されたら後ろにのけぞる
+  const d = p.dir, want = Math.max(-0.42, Math.min(0.42, Math.atan2(-d.x, -d.y))) * 0.5
+  if (mode === 'play' || mode === 'result') camYaw += (want - camYaw) * (1 - Math.exp(-dt * 2.4))
   knock = Math.max(0, knock - dt * 0.8)
-  const bob = Math.hypot(p.vx, p.vy) > 0.4 ? Math.sin(performance.now() / 120) * 0.012 : 0
   window.__crowd = mode === 'play' ? w.crowdAt(p) : 0
-  // 自分の頭の少し後ろから見る（前の人の頭にめり込まない）
-  camera.position.set(wx(h.x) + off - d.x * 0.1, EYE + bob - knock * 0.18, wz(h.y) - d.y * 0.1 + knock * 0.15)
-  if (mode === 'title') camera.position.set(wx(GC) , EYE + 0.05, wz(CAR.wall + 210))
-  const sh = shake
-  if (sh > 0) camera.position.add(_v.set((Math.random() - 0.5) * sh * 0.06, (Math.random() - 0.5) * sh * 0.05, (Math.random() - 0.5) * sh * 0.04))
-  const trainRoll = w.phase === 'depart' && p.core[0].frozen ? Math.sin(performance.now() / 700) * 0.008 * Math.min(1, w.trainV / 3) : 0
-  const pitch = -0.13 - Math.min(0.14, Math.max(0, (window.__crowd || 0) - 4) * 0.012)
-  camera.rotation.set(pitch + knock * 0.35 + (mode === 'title' ? 0.02 : 0), camYaw + glanceYaw(), trainRoll + (mode === 'play' ? -camYaw * 0.05 : 0))
-  // 視野: 縦長はたてに広げる。混んでいるほど狭く（ぎゅっと）。押した瞬間に一瞬ズーム
-  const base = asp >= 1 ? 66 : Math.min(86, 2 * Math.atan(Math.tan(THREE.MathUtils.degToRad(34)) / asp) * 180 / Math.PI)
   const crowd = window.__crowd
-  const fov = base - Math.min(9, Math.max(0, crowd - 6) * 0.6)
+  const W_ = W
+  if (mode === 'title') {
+    camera.position.set(wx(GC), EYE + 0.05, wz(CAR.wall + 210)); camera.rotation.set(-0.11, 0, 0); camInit = false
+    camera.fov = asp >= 1 ? 66 : Math.min(86, 2 * Math.atan(Math.tan(THREE.MathUtils.degToRad(34)) / asp) * 180 / Math.PI)
+    camera.aspect = asp; camera.updateProjectionMatrix()
+    W_.cut.forEach(o => o.visible = true)
+    return
+  }
+  // 屋根・天井・つり革は切り取る（上から車内とドアの隙間が見えるように）
+  W_.cut.forEach(o => o.visible = false)
+  const m = mid(p), px = wx(m.x) + off, pz = wz(m.y)
+  const fx = -Math.sin(camYaw), fz = -Math.cos(camYaw)
+  const port = asp < 1
+  // 混むほど少し上から見下ろす。乗った後は引いて電車ごと見せる
+  const ride = w.phase !== 'play' && p.outcome === 'in' ? Math.min(1, w.departT / 120) : 0
+  const back = (port ? 3.0 : 2.6) + ride * 1.6, up = (port ? 3.3 : 2.75) + Math.min(0.5, crowd * 0.025) + ride * 1.2 + knock * 0.6
+  _v.set(px - fx * back, Math.min(4.2, up), pz - fz * back)
+  const lk = _cp.set(px + fx * (port ? 1.0 : 1.4), 0.55, pz + fz * (port ? 1.0 : 1.4))
+  if (!camInit) { camPos.copy(_v); camLook.copy(lk); camInit = true }
+  camPos.lerp(_v, 1 - Math.exp(-dt * 6)); camLook.lerp(lk, 1 - Math.exp(-dt * 8))
+  camera.position.copy(camPos)
+  if (shake > 0) camera.position.add(_v.set((Math.random() - 0.5) * shake * 0.12, (Math.random() - 0.5) * shake * 0.1, (Math.random() - 0.5) * shake * 0.08))
+  camera.lookAt(camLook)
+  if (w.phase === 'depart' && p.core[0].frozen) camera.rotateZ(Math.sin(performance.now() / 700) * 0.006 * Math.min(1, w.trainV / 3))
+  // 視野: 縦長はたてに広げる。混んでいるほど狭く（ぎゅっと）。押した瞬間に一瞬ズーム
+  const base = asp >= 1 ? 56 : Math.min(84, 2 * Math.atan(Math.tan(THREE.MathUtils.degToRad(32)) / asp) * 180 / Math.PI)
+  const fov = base - Math.min(6, Math.max(0, crowd - 6) * 0.4)
   fovKick *= Math.exp(-dt * 7)
   camera.fov = fov + fovKick; camera.aspect = asp; camera.updateProjectionMatrix()
-  $('fxVig').style.opacity = mode === 'play' ? Math.min(0.85, Math.max(0, (crowd - 6) / 16)).toFixed(2) : '0'
+  $('fxVig').style.opacity = mode === 'play' ? Math.min(0.6, Math.max(0, (crowd - 6) / 20)).toFixed(2) : '0'
   // 香水のきつい人に近いと画面がうっすら紫
   let pf = 0
-  if (mode === 'play') for (const b of w.bodies) if (b.type === 'perfume') { const c = mid(b), dd = Math.hypot(c.x - h.x, c.y - h.y); pf = Math.max(pf, Math.min(1, (130 - dd) / 80)) }
+  if (mode === 'play') for (const b of w.bodies) if (b.type === 'perfume') { const c = mid(b), dd = Math.hypot(c.x - p.head.x, c.y - p.head.y); pf = Math.max(pf, Math.min(1, (130 - dd) / 80)) }
   window.__perfume = pf
   $('fxPerfume').style.opacity = Math.max(0, pf * 0.75).toFixed(2)
-  // 手: 押した瞬間に前へ突き出す
-  const k = p.shoveAnim / 10, spread = k * 0.05
-  // 縦長の画面は横が狭いので、手を内側に寄せて画面に入れる
-  const halfW = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * asp * 0.36
-  const hx = Math.min(0.19, halfW * 0.72)
-  for (const g of handParts) {
-    const s = g.userData.s
-    g.position.set(s * (hx * 0.85 + spread), -0.2 + k * 0.05 + bob * 0.6, -0.36 - k * 0.16)
-    g.rotation.set(k * 0.25, -s * 0.12, -s * 0.15)
-  }
-  hands.visible = mode === 'play' && w.phase === 'play' && !p.ejected
 }
 
 // ---------------------------------------------------------------- 画面の文字
@@ -449,7 +490,7 @@ applyLang()
 
 // ---------------------------------------------------------------- 検証用の窓口
 window.rh = {
-  get mode() { return mode }, get w() { return w }, PT, camera, renderer, LOW, MAXV,
+  get mode() { return mode }, get w() { return w }, PT, camera, renderer, LOW, MAXV, THREE, W, get me() { return meModel }, get peopleShown() { return [...vis.values()] },
   start, toTitle, showResult, setLang: l => { lang = l; applyLang() }, get lang() { return lang },
   get visCount() { return vis.size }, get pool() { return pool.made },
   dbg: {

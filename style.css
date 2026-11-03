@@ -49,6 +49,9 @@ button,a{font-family:inherit;color:inherit;background:none;border:0;cursor:point
 .knob{position:absolute;left:50%;top:50%;width:50px;height:50px;margin:-25px 0 0 -25px;border-radius:50%;background:rgba(255,255,255,.8)}
 .push{position:absolute;right:calc(env(safe-area-inset-right) + 18px);bottom:calc(env(safe-area-inset-bottom) + 22px);width:112px;height:112px;border-radius:50%;background:#16794f;border:4px solid #0d4e33;box-shadow:0 6px 0 #0d4e33,0 10px 20px rgba(0,0,0,.35);pointer-events:auto;display:flex;align-items:center;justify-content:center;transition:transform .06s}
 .push svg{width:64px;height:64px;transform:rotate(-8deg)}
+.grab{position:absolute;right:calc(env(safe-area-inset-right) + 140px);bottom:calc(env(safe-area-inset-bottom) + 30px);width:84px;height:84px;border-radius:50%;background:#3b3d40;border:4px solid #1f2022;pointer-events:auto;display:flex;align-items:center;justify-content:center}
+.grab svg{width:50px;height:50px}
+.grab.on{background:#ff9a2a;border-color:#a85a10;box-shadow:0 0 0 6px rgba(255,154,42,.35)}
 .push.on{transform:translateY(5px) scale(.96);box-shadow:0 1px 0 #0d4e33}
 .quit{position:absolute;right:calc(env(safe-area-inset-right) + 8px);top:max(10px,env(safe-area-inset-top));width:40px;height:40px;pointer-events:auto;background:rgba(0,0,0,.35);border-radius:50%;display:flex;align-items:center;justify-content:center}
 .quit svg{width:18px;height:18px}
@@ -98,6 +101,8 @@ button,a{font-family:inherit;color:inherit;background:none;border:0;cursor:point
   .sub{margin-top:8px;font-size:13px}
   .push{width:92px;height:92px}
   .push svg{width:52px;height:52px}
+  .grab{width:70px;height:70px;right:calc(env(safe-area-inset-right) + 118px);bottom:calc(env(safe-area-inset-bottom) + 26px)}
+  .grab svg{width:42px;height:42px}
   #result{flex-direction:row;gap:18px}
   .notice{padding:10px 16px}
   .notice ol{gap:4px;font-size:14px}

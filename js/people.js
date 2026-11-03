@@ -34,8 +34,8 @@ export function loadPeople(manager) {
 
 // 見た目の決まり方: 種類 から 元のキャラ・色の掛け方・付ける物
 // 通勤客はスーツの2人を多めにして、色を少し落として朝の電車らしくする
-// female-a は松葉杖、male-e は手に物を持っているので通勤客には使わない
-const COMMUTER = ['male-d', 'male-d', 'male-d', 'female-d', 'female-d', 'female-d', 'male-f', 'female-b', 'female-e', 'female-f', 'male-d', 'female-d', 'male-f']
+// 自分は female-b。female-a は松葉杖、male-e は手に物を持っているので通勤客には使わない
+const COMMUTER = ['male-d', 'male-d', 'male-d', 'female-d', 'female-d', 'female-d', 'male-f', 'female-e', 'female-f', 'male-d', 'female-d', 'male-f']   // female-b（黄色と紫）は自分の見た目にする
 export function lookOf(b) {
   const n = b.look || 0
   switch (b.type) {
@@ -91,13 +91,19 @@ export class Person {
     }
     this.mixer = new THREE.AnimationMixer(ch)
     this.acts = {}
-    for (const n of ['idle', 'walk', 'sit', 'emote-no', 'holding-both', 'crouch']) {
+    for (const n of ['idle', 'walk', 'sit', 'emote-no', 'holding-both', 'crouch', 'attack-melee-right']) {
       const c = A.clips[n]; if (!c) continue
       const a = this.mixer.clipAction(c); this.acts[n] = a
-      if (n === 'emote-no') { a.setLoop(THREE.LoopOnce); a.clampWhenFinished = false }
     }
     this.cur = null; this.play('idle'); this.mixer.update(Math.random() * 2)
-    this.acc = 0
+    this.acc = 0; this.fade = 1
+    this.mats = []; this.group.traverse(o => { if (o.isMesh) this.mats.push(o.material) })
+  }
+  // 透かす（カメラと自分の間にいる人）。0 で消す
+  setFade(a) {
+    if (a === this.fade) return
+    this.fade = a; this.group.visible = a > 0
+    for (const m of this.mats) { m.transparent = a < 1; m.opacity = a; m.depthWrite = a >= 1; m.needsUpdate = true }
   }
   play(n, fade = 0.2) {
     const a = this.acts[n]; if (!a || this.cur === a) return

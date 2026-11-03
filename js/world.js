@@ -1,7 +1,7 @@
 // 駅と電車の3D。素材は全部その場で描く（canvas の模様）。外部の画像は読まない
 // 盤面 px から m は S。ドアの中心が x=0、車両の壁（ドアの位置）が z=0、車内は z<0、ホームは z>0
 import * as THREE from 'three'
-import { CAR, GC, GH, WT, POLES } from './phys.js?v=1'
+import { CAR, GC, GH, WT, POLES } from './phys.js?v=2'
 
 export const S = 0.02   // 人（Kenney Mini を 1.45 倍）の横幅が盤面の肩幅 54px に合う縮尺
 export const wx = x => (x - GC) * S
@@ -38,12 +38,13 @@ export function buildWorld(scene, Q) {
   for (const s of [-1, 1]) for (let k = 0; k < 3; k++) { const f = new THREE.Mesh(new THREE.PlaneGeometry(0.38, 0.38), M({ map: foot, transparent: true })); f.rotation.x = -Math.PI / 2; f.position.set(s * 1.1, 0.005, 1.9 + k * 0.6); scene.add(f) }
   // 屋根・柱・奥の壁
   const pillarM = M({ color: 0xd8d6d0 })
-  for (const x of [-9, 9]) box(0.4, 3.6, 0.4, pillarM, x, 1.8, PD * 0.55, scene)
-  box(60, 0.18, PD, M({ color: 0x8b9096 }), 0, 3.6, PD / 2 + 0.3, scene)
-  for (let i = -4; i <= 4; i++) box(1.6, 0.05, 0.14, M({ color: 0xffffff, emissive: 0xf4f8ff, emissiveIntensity: 1.2 }), i * 5, 3.49, PD * 0.4, scene)
+  // 屋根は高め（遊び中のカメラが 4.2m まで上がる）
+  for (const x of [-9, 9]) box(0.4, 5, 0.4, pillarM, x, 2.5, PD * 0.55, scene)
+  box(60, 0.18, PD, M({ color: 0x8b9096 }), 0, 5, PD / 2 + 0.3, scene)
+  for (let i = -4; i <= 4; i++) box(1.6, 0.05, 0.14, M({ color: 0xffffff, emissive: 0xf4f8ff, emissiveIntensity: 1.2 }), i * 5, 4.89, PD * 0.4, scene)
   const wallT = cv(512, 128, (x, w, h) => { x.fillStyle = '#d9d5cc'; x.fillRect(0, 0, w, h); x.fillStyle = '#c6c1b6'; for (let i = 0; i < w; i += 32) x.fillRect(i, 0, 2, h); noise(x, w, h, 600, 0.08) })
   wallT.wrapS = THREE.RepeatWrapping; wallT.repeat.set(5, 1)
-  box(60, 3.6, 0.2, M({ map: wallT }), 0, 1.8, PD, scene)
+  box(60, 5, 0.2, M({ map: wallT }), 0, 2.5, PD, scene)
   // 駅名標（ホームの奥の壁に1枚）
   const sign = cv(512, 192, (x, w, h) => {
     x.fillStyle = '#f7f7f4'; x.fillRect(0, 0, w, h)
@@ -164,5 +165,8 @@ export function buildWorld(scene, Q) {
   })
   // 車体の下の暗がり（ホームの縁の下）
   box(60, 1.2, 0.6, M({ color: 0x24221f }), 0, -0.6, 0.2, scene)
+  // 遊び中は屋根・天井・幕板・つり革・広告を切り取って、上から車内とドアの隙間を見せる
+  W.cut = []
+  train.traverse(o => { if (o.isMesh && o !== outside && Math.abs(o.position.x) < (X1 - X0) / 2 + 0.5 && (o.position.y > 1.88 || o.isInstancedMesh)) W.cut.push(o) })
   return W
 }

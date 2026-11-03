@@ -3,12 +3,12 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
-<title>満員電車に乗り込め | 主観で押し込む3Dバカゲー</title>
-<meta name="description" content="発車まで30秒、満員電車に一人称で乗り込む3Dのバカゲー。背中を押して隙間を作り、閉まるドアに挟まると「駆け込み乗車はおやめください」で弾き出される。スマホのブラウザで無料で遊べる電車に乗り込むゲーム。">
+<title>満員電車に乗り込め | 押してつかんで乗り込む3Dバカゲー</title>
+<meta name="description" content="発車まで30秒、満員電車に乗り込む3Dのバカゲー。背中を押し、前の人をつかんで引っぱり出して隙間を作る。閉まるドアに挟まると「駆け込み乗車はおやめください」で弾き出される。スマホのブラウザで無料で遊べる電車に乗り込むゲーム。">
 <meta property="og:type" content="website">
 <meta property="og:title" content="満員電車に乗り込め">
-<meta property="og:description" content="発車まで30秒。目の前は背中とリュック。押して押して満員電車に乗り込む主観の3Dバカゲー。スマホで遊べる。">
-<meta property="og:image" content="https://tom3games.github.io/rush-hour-train/og.png?v=1">
+<meta property="og:description" content="発車まで30秒。背中を押して、前の人をつかんで引っぱり出して、満員電車に乗り込む3Dバカゲー。スマホで遊べる。">
+<meta property="og:image" content="https://tom3games.github.io/rush-hour-train/og.png?v=2">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta property="og:url" content="https://tom3games.github.io/rush-hour-train/">
@@ -18,7 +18,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DotGothic16&family=M+PLUS+1p:wght@500;800;900&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=1">
+<link rel="stylesheet" href="style.css?v=2">
 <script type="importmap">{ "imports": { "three": "./vendor/three.module.js" } }</script>
 </head>
 <body>
@@ -44,6 +44,9 @@
   <div id="say" class="say hidden"></div>
   <div id="touch" class="touch hidden">
     <div id="stickZone" class="stickzone"><div id="stick" class="stick hidden"><div class="knob"></div></div></div>
+    <button id="btnGrab" class="grab" aria-label="grab">
+      <svg viewBox="0 0 64 64"><path d="M16 30c0-4 5-5 6-1v-6c0-4 6-4 6 0v-2c0-4 6-4 6 0v2c0-4 6-4 6 0v4c0-3 6-3 6 1v12c0 10-6 16-15 16h-2c-8 0-13-7-13-15z" fill="#fbfbf8" stroke="#2a2a2a" stroke-width="2.4" stroke-linejoin="round"/><path d="M22 29v6M28 23v10M34 23v10M40 27v8" stroke="#2a2a2a" stroke-width="2"/></svg>
+    </button>
     <button id="btnPush" class="push" aria-label="push">
       <svg viewBox="0 0 64 64"><path d="M20 58c-5-6-11-15-13-22-1-3 3-5 5-3l6 7V12c0-3 4-3 4 0v18h2V8c0-3 4-3 4 0v22h2V10c0-3 4-3 4 0v20h2V15c0-3 4-3 4 0v25c0 9-3 14-6 18z" fill="#fbfbf8" stroke="#2a2a2a" stroke-width="2.4" stroke-linejoin="round"/><path d="M20 58h18" stroke="#2a2a2a" stroke-width="2.4"/></svg>
     </button>
@@ -118,8 +121,8 @@
   },15000);
 })();
 </script>
-<script src="data.js?v=1"></script>
-<script src="sfx.js?v=1"></script>
-<script type="module" src="js/game.js?v=1"></script>
+<script src="data.js?v=2"></script>
+<script src="sfx.js?v=2"></script>
+<script type="module" src="js/game.js?v=2"></script>
 </body>
 </html>

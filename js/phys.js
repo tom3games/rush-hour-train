@@ -9,7 +9,7 @@ export const ROUND = 30 * 60                              // 30秒
 export const CLOSE_STEPS = 50                             // ドアが閉まり切るまで
 const DAMP = 0.84
 // 難しさの調整値（前作で bot の乗車率から決めた値。検証からも書き換える）
-export const T = { rowGap: 30, colGap: 38, doorZone: 200, fill: 0.85, npcIm: 0.6, homeK: 0.01, homeMax: 0.6, drift: 0, moveAcc: 0.5, sleepIm: 0.22, sleepK: 0.03, vipChance: 0.12, cap: 80, faceIn: 0.75, shoveF: 11, staffF: 0.7 }   // shoveF・staffF は変な客込みで bot が前作並み（押す約6割・歩くだけ0）になるよう 2026-11-03 に調整
+export const T = { rowGap: 30, colGap: 38, doorZone: 200, fill: 0.85, npcIm: 0.6, homeK: 0.01, homeMax: 0.6, drift: 0, moveAcc: 0.5, sleepIm: 0.22, sleepK: 0.03, vipChance: 0.12, cap: 80, faceIn: 0.75, shoveF: 11, staffF: 0.7, dragAcc: 0.28, stunDrop: 90, stunThrow: 160 }   // shoveF・staffF は変な客込みで bot が前作並み（押す約6割・歩くだけ0）になるよう 2026-11-03 に調整
 
 const STATIC = [
   { x0: -200, y0: -200, x1: W + 200, y1: CAR.t },
@@ -90,7 +90,7 @@ export class World {
         const nearDoor = Math.abs(x - GC) < T.doorZone
         if (!nearDoor && this.rng() > T.fill) continue
         if (POLES.some(q => (q.x - x) ** 2 + (q.y - y) ** 2 < 28 * 28)) continue
-        // 大半はドアに背中を向けて車内の奥を向く（主観で背中が迫る）
+        // 大半はドアに背中を向けて車内の奥を向く（後ろから見ると背中が並ぶ）
         const ang = this.rng() < T.faceIn ? -Math.PI / 2 + this.rnd(-0.8, 0.8) : this.rnd(0, Math.PI * 2)
         const b = this.makePerson(x + this.rnd(-4, 4), y + this.rnd(-3, 3), ang, 'npc')
         b.look = Math.floor(this.rng() * 1000)
@@ -234,7 +234,7 @@ export class World {
     const b = this.player
     if (b.shoveCd > 0) b.shoveCd--
     if (b.shoveAnim > 0) b.shoveAnim--
-    if (b.core[0].frozen || (b.caught && this.phase === 'play') || !inp) return
+    if (b.core[0].frozen || (b.caught && this.phase === 'play') || !inp) { if (b.grab) this.releaseGrab(b, false); return }
     let { x, y } = inp; const len = Math.hypot(x, y)
     if (len > 1) { x /= len; y /= len }
     if (len > 0.2) {
@@ -245,6 +245,53 @@ export class World {
       b.rh.ax += b.dir.x * 0.25; b.rh.ay += b.dir.y * 0.25
     } else if (inp.face) b.dir = inp.face   // 止まっている時は見ている向きに押す
     if (inp.shove && b.shoveCd <= 0 && this.phase === 'play') this.shove(b)
+    // つかむ（前作 f508970 / 399e928）: つかんでいる間は手が相手にくっつき、歩くと引きずる。離すと進む向きに投げる
+    const want = !!inp.grab && this.phase === 'play'
+    if (want && !b.grab && !b.grabHeld) this.tryGrab(b)
+    b.grabHeld = want
+    if (!want && b.grab) this.releaseGrab(b, len > 0.2)
+    if (b.grab) {
+      const g = b.grab, q = g.target
+      if (q.frozen || Math.hypot(g.hand.x - q.x, g.hand.y - q.y) > 46) this.releaseGrab(b, false)
+      else {
+        b.grabT++
+        const heavy = q.body.type === 'sleep'
+        if (!heavy) q.body.held = 3   // つかまれている間は踏ん張れない（寝ている人は重くて動かない）
+        const k = heavy ? T.dragAcc * 0.12 : T.dragAcc
+        if (len > 0.2) for (const p of q.body.core) { p.ax += x * k; p.ay += y * k }
+      }
+    }
+  }
+
+  tryGrab(b) {
+    const rx = b.head.x + b.dir.x * 26, ry = b.head.y + b.dir.y * 26
+    let best = null, bd = 46, fail = null
+    for (const q of this.parts) {
+      if (q.body === b || q.frozen) continue
+      const d = Math.hypot(q.x - rx, q.y - ry)
+      if (d >= bd) continue
+      if (q.body.kind === 'staff' || q.body.type === 'vip') { if (!fail || d < fail.d) fail = { b: q.body, d }; continue }   // 駅員と謎の人はつかめない
+      bd = d; best = q
+    }
+    if (!best) { b.grabTry = (b.grabTry || 0) + 1; this.ev.push({ t: 'grabFail', target: fail && fail.b }); return }
+    const hand = Math.hypot(b.lh.x - best.x, b.lh.y - best.y) < Math.hypot(b.rh.x - best.x, b.rh.y - best.y) ? b.lh : b.rh
+    const con = { a: hand, b: best, d: hand.r + best.r - 4, s: 0.7 }
+    this.cons.push(con)
+    b.grab = { hand, target: best, con }; b.grabT = 0; b.grabs = (b.grabs || 0) + 1
+    this.ev.push({ t: 'grab', target: best.body })
+  }
+  releaseGrab(b, throwIt) {
+    const g = b.grab; if (!g) return
+    const i = this.cons.indexOf(g.con); if (i >= 0) this.cons.splice(i, 1)
+    const tb = g.target.body, thrown = throwIt && b.grabT > 8 && !g.target.frozen && tb.type !== 'sleep'
+    if (thrown) { for (const p of tb.all) { if (p.frozen) continue; p.x += b.dir.x * 8; p.y += b.dir.y * 8 } b.throws = (b.throws || 0) + 1 }
+    // 離された客はしばらくふらつく。ホームに出された客は立ち直ってから乗り直しに来る
+    if (!g.target.frozen && tb.type !== 'sleep') {
+      tb.held = thrown ? T.stunThrow : T.stunDrop
+      if (tb.kind === 'npc' && mid(tb).y > CAR.wall + 5) { tb.kind = 'rival'; tb.held = Math.max(tb.held, T.stunThrow); tb.out = true }
+    }
+    b.grab = null
+    this.ev.push({ t: 'release', target: tb, thrown })
   }
 
   ai() {
@@ -320,6 +367,7 @@ export class World {
     return b.all.some(p => Math.abs(p.x - GC) < half + p.r && Math.abs(p.y - CAR.wall) < WT + p.r) ? [b] : []
   }
   eject(b) {
+    if (b.grab) this.releaseGrab(b, false)
     b.ejected = true
     const kick = this.rnd(-6, 6)
     for (const p of b.all) { p.px = p.x; p.py = p.y; p.y += 30; p.x += kick }
@@ -327,6 +375,7 @@ export class World {
     this.ev.push({ t: 'eject' })
   }
   closeDoorsFinal() {
+    if (this.player.grab) this.releaseGrab(this.player, false)
     this.door = 1
     let n = 0
     for (const b of this.bodies) {
@@ -401,7 +450,7 @@ export class World {
 
   // 乗れているか（体の中心が車内）
   inside(b = this.player) { return mid(b).y < CAR.wall - 2 }
-  // 体のまわりの混み具合（主観の圧迫感に使う）
+  // 体のまわりの混み具合（混雑の演出に使う）
   crowdAt(b = this.player, R = 46) {
     const c = b.head; let n = 0
     for (const p of this.parts) { if (p.body === b) continue; const dx = p.x - c.x, dy = p.y - c.y; if (dx * dx + dy * dy < R * R) n++ }
@@ -428,7 +477,20 @@ function pushOutRect(p, R) {
 // bot: ドアの少し奥を目指して進む。shove=true で押し続ける
 export function botInput(w, mode) {
   if (mode === 'idle') return { x: 0, y: 0, shove: false }
-  const m = mid(w.player), tx = GC, ty = CAR.wall - 110
+  const b = w.player, m = mid(b), tx = GC, ty = CAR.wall - 110
   const dx = tx - m.x, dy = ty - m.y, d = Math.hypot(dx, dy) || 1
-  return { x: dx / d, y: dy / d, shove: mode === 'shove' }
+  if (mode !== 'grab' && mode !== 'mix') return { x: dx / d, y: dy / d, shove: mode === 'shove' }
+  // つかんでどける bot: ドアの前で詰まったら、前の人をつかんでホーム側の横へ引きずり出して投げる。押しは使わない（mix は押しも使う）
+  const st = b.bot || (b.bot = { t: 0, stuck: 0, ly: m.y })
+  st.t++
+  if (b.grab) {
+    // 後ろ斜め（ドアから離れる横方向）へ引く。40ステップで投げる
+    const side = mid(b.grab.target.body).x < GC ? -1 : 1
+    if (b.grabT > 40) return { x: side, y: 0.6, grab: false, shove: false }
+    return { x: side * 0.7, y: 0.7, grab: true, shove: false }
+  }
+  if (st.t % 30 === 0) { st.stuck = Math.abs(m.y - st.ly) < 6 ? st.stuck + 1 : 0; st.ly = m.y }
+  const want = st.stuck >= 1 && m.y < CAR.wall + 80
+  if (want) st.stuck = 0
+  return { x: dx / d, y: dy / d, grab: want, shove: mode === 'mix' }
 }

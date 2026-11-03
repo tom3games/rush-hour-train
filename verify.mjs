@@ -98,6 +98,79 @@ await t('押しボタンを押しっぱなしにしても連発しない（1回�
   const r = await p.evaluate(() => { const n0 = rh.w.player.shoves; rh.dbg.step(120); return rh.w.player.shoves - n0 })
   expect(r === 0, r)
 })
+await t('視点: 自分の斜め後ろ・高めから。自分が画面の中に見え、屋根は切り取られている', async () => {
+  const r = await p.evaluate(() => {
+    rh.start(1001); rh.dbg.pause(true); window.__bot = 'shove'; for (let i = 0; i < 300; i++) rh.dbg.step(1); window.__bot = null
+    const c = rh.camera.position, pl = rh.w.player, m = { x: (pl.ls.x + pl.rs.x) / 2, y: (pl.ls.y + pl.rs.y) / 2 }
+    const px = (m.x - 640) * 0.02, pz = (m.y - 330) * 0.02
+    const v = new rh.THREE.Vector3(px, 0.9, pz).project(rh.camera)
+    return { camY: +c.y.toFixed(2), behind: +(c.z - pz).toFixed(2), dist: +Math.hypot(c.x - px, c.z - pz).toFixed(2), ndc: [+v.x.toFixed(2), +v.y.toFixed(2)], meVisible: rh.me.group.visible, roofCut: rh.W.cut.every(o => !o.visible), cutN: rh.W.cut.length }
+  })
+  expect(r.camY > 2.4 && r.behind > 1.5 && r.dist < 5 && Math.abs(r.ndc[0]) < 0.8 && Math.abs(r.ndc[1]) < 0.85 && r.meVisible && r.roofCut && r.cutN > 5, JSON.stringify(r)); return r
+})
+await t('視点: カメラと自分の間にいる人は透けて、自分が隠れない', async () => {
+  const r = await p.evaluate(() => { let faded = 0, n = 0; for (let i = 0; i < 400; i++) { rh.dbg.step(1); for (const q of rh.peopleShown) { n++; if (q.fade < 1) faded++ } } return { faded, n } })
+  expect(r.faded > 0, JSON.stringify(r)); return r
+})
+await t('つかむ（PC）: G を押している間つかみ、引きずり、離すと投げる。離された客はふらつく', async () => {
+  const r = await p.evaluate(() => {
+    rh.start(1001); rh.dbg.pause(true); window.__bot = 'walk'; rh.dbg.step(240); window.__bot = null
+    rh.dbg.input({ x: 0, y: 0, grab: true, face: { x: 0, y: -1 } }); rh.dbg.step(2)
+    const g = rh.w.player.grab, tgt = g && g.target.body, y0 = tgt && (tgt.ls.y + tgt.rs.y) / 2
+    rh.dbg.input({ x: 0.3, y: 1, grab: true }); rh.dbg.step(30)
+    const y1 = tgt && (tgt.ls.y + tgt.rs.y) / 2
+    rh.dbg.input({ x: 0.3, y: 1, grab: false }); rh.dbg.step(1)
+    const out = { grabbed: !!g, type: tgt && tgt.type, dragged: tgt ? +(y1 - y0).toFixed(1) : 0, released: !rh.w.player.grab, throws: rh.w.player.throws || 0, held: tgt ? tgt.held : 0 }
+    rh.dbg.input(null); return out
+  })
+  expect(r.grabbed && r.dragged > 5 && r.released && r.throws === 1 && r.held > 60, JSON.stringify(r)); return r
+})
+await t('つかむ: 駅員と謎の人はつかめない・寝ているおっさんは重くて動かない', async () => {
+  const r = await p.evaluate(() => {
+    const w = rh.w
+    // 手の届く点（頭の前26px）を相手の頭に合わせてつかみ、40ステップ引く。寝ている人と普通の客で比べる
+    const pull = (pick) => {
+      rh.start(1001); rh.dbg.pause(true)
+      const t = pick(rh.w), pl = rh.w.player, hx = pl.head.x, hy = pl.head.y
+      for (const q of pl.all) { q.x = q.px = t.head.x + (q.x - hx); q.y = q.py = t.head.y + 26 + (q.y - hy) }
+      rh.dbg.input({ x: 0, y: 0, grab: true, face: { x: 0, y: -1 } }); rh.dbg.step(1)
+      const got = rh.w.player.grab && rh.w.player.grab.target.body
+      const y0 = (t.ls.y + t.rs.y) / 2; rh.dbg.input({ x: 0, y: 1, grab: true }); rh.dbg.step(40)
+      const moved = (t.ls.y + t.rs.y) / 2 - y0; rh.dbg.input(null); rh.dbg.step(1)
+      return { type: got && got.type, moved: +moved.toFixed(1) }
+    }
+    const sl = pull(w => w.bodies.find(b => b.type === 'sleep'))
+    const cm = pull(w => w.bodies.filter(b => b.type === 'commuter' && b.kind === 'npc').sort((a, b) => Math.abs(a.head.x - 640) + Math.abs(a.head.y - 300) - Math.abs(b.head.x - 640) - Math.abs(b.head.y - 300))[0])
+    const gs = sl.type, sleepMoved = sl.moved
+    // 謎の人
+    rh.start(5000, { vip: true }); rh.dbg.pause(true)
+    const vip = rh.w.vip, pl2 = rh.w.player
+    const c = { x: (vip.ls.x + vip.rs.x) / 2, y: (vip.ls.y + vip.rs.y) / 2 }, hx = pl2.head.x, hy = pl2.head.y
+    for (const q of pl2.all) { q.x = q.px = c.x + (q.x - hx); q.y = q.py = c.y + 36 + (q.y - hy) }
+    rh.dbg.input({ x: 0, y: 0, grab: true, face: { x: 0, y: -1 } }); rh.dbg.step(1)
+    const vipGrab = rh.w.player.grab ? rh.w.player.grab.target.body.type : null
+    rh.dbg.input(null)
+    return { gs, sleepMoved, commuter: cm, vipGrab }
+  })
+  expect(r.gs === 'sleep' && r.commuter.type === 'commuter' && r.sleepMoved < r.commuter.moved * 0.5 && r.vipGrab !== 'vip', JSON.stringify(r)); return r
+})
+await t('つかむ: ホームに投げ出された客は立ち直って乗り直しに来る', async () => {
+  const r = await p.evaluate(() => {
+    rh.start(1002); rh.dbg.pause(true); window.__bot = 'grab'
+    let out = null
+    for (let i = 0; i < 1200 && !out; i++) { rh.dbg.step(1); out = rh.w.bodies.find(b => b.out) }
+    window.__bot = 'idle'
+    if (!out) return null
+    const y0 = (out.ls.y + out.rs.y) / 2; rh.dbg.step(400); const y1 = (out.ls.y + out.rs.y) / 2
+    window.__bot = null
+    return { kind: out.kind, y0: Math.round(y0 - 330), y1: Math.round(y1 - 330) }
+  })
+  expect(r && r.y0 > 0 && r.y1 < r.y0 - 20, JSON.stringify(r)); return r
+})
+await t('PC ではタッチのボタン（押す・つかむ）を出さない', async () => {
+  const r = await p.evaluate(() => getComputedStyle(document.getElementById('touch')).display)
+  expect(r === 'none', r)
+})
 await t('Node の計算とブラウザの計算が同じ結果（同じ種・同じ bot）', async () => {
   const out = []
   for (const seed of [1001, 1004]) {
@@ -108,17 +181,17 @@ await t('Node の計算とブラウザの計算が同じ結果（同じ種・同
   }
   return out
 })
-await t('bot（ブラウザ）: 押す bot は乗れる・歩くだけと何もしないは乗れない', async () => {
+await t('bot（ブラウザ）: 押すだけ・つかんでどけるだけの bot は乗れる・歩くだけと何もしないは乗れない', async () => {
   const r = await p.evaluate(() => {
     const out = {}
-    for (const m of ['shove', 'walk', 'idle']) {
+    for (const m of ['shove', 'grab', 'walk', 'idle']) {
       let ok = 0
-      for (let s = 0; s < 6; s++) { rh.start(2000 + s, { vip: false }); rh.dbg.pause(true); window.__bot = m; rh.dbg.runToEnd(); if (rh.w.result.outcome === 'in') ok++ }
+      for (let s = 0; s < 8; s++) { rh.start(2000 + s, { vip: false }); rh.dbg.pause(true); window.__bot = m; rh.dbg.runToEnd(); if (rh.w.result.outcome === 'in') ok++ }
       out[m] = ok
     }
     window.__bot = null; return out
   })
-  expect(r.shove >= 3 && r.walk <= 1 && r.idle === 0, JSON.stringify(r)); return r
+  expect(r.shove >= 3 && r.grab >= 1 && r.walk <= 1 && r.idle === 0, JSON.stringify(r)); return r
 })
 await t('残り10秒で駅員が出る・掲示板に案内・駅員が押す', async () => {
   const r = await p.evaluate(() => { rh.start(2101, { vip: false }); rh.dbg.pause(true); window.__bot = 'walk'; rh.dbg.step(1200 + 2); const a = { staff: !!rh.w.staff, led: document.getElementById('ledText').textContent }; rh.dbg.step(400); a.pushed = rh.w.staff.pushing || rh.w.staff.target != null; window.__bot = null; return a })
@@ -252,6 +325,17 @@ await t('WebKit: タップで始まり、スティックで進み、手のボタ
   await wp.tap('#btnPush'); await wp.waitForTimeout(300)
   const sh = await wp.evaluate(() => rh.w.player.shoves)
   expect(vis && y1 < y0 - 10 && sh >= 1, JSON.stringify({ vis, y0, y1, sh })); return { moved: Math.round(y0 - y1), shoves: sh }
+})
+await t('WebKit: にぎる手のボタンはスイッチ式（1回でつかむ・もう1回で離す）', async () => {
+  const r = await wp.evaluate(() => { rh.dbg.pause(true); window.__bot = 'walk'; rh.dbg.step(200); window.__bot = null; return 1 })
+  await wp.tap('#btnGrab')
+  const a = await wp.evaluate(() => { rh.dbg.step(3); return { on: document.getElementById('btnGrab').classList.contains('on'), grab: !!rh.w.player.grab } })
+  await wp.evaluate(() => rh.dbg.step(60))
+  const b = await wp.evaluate(() => ({ still: !!rh.w.player.grab }))
+  await wp.tap('#btnGrab')
+  const c = await wp.evaluate(() => { rh.dbg.step(2); return { on: document.getElementById('btnGrab').classList.contains('on'), grab: !!rh.w.player.grab } })
+  await wp.evaluate(() => rh.dbg.pause(false))
+  expect(a.on && a.grab && b.still && !c.on && !c.grab, JSON.stringify({ a, b, c })); return { a, c }
 })
 await wp.screenshot({ path: ROOT + '/shots/v-webkit-play.png' })
 await t('WebKit: 実際には無音（タップで始めた後）', async () => { const r = await wp.evaluate(() => window.__muteOk()); expect(r, r) })
