@@ -44,7 +44,11 @@ export function lookOf(b) {
     case 'pack': return { key: 'pack' + (b.id % 2), file: b.id % 2 ? 'male-f' : 'female-f', tint: 0xffffff, pack: true }
     case 'perfume': return { key: 'perfume', file: 'female-c', tint: 0xffd6ec }
     case 'vip': return { key: 'vip', file: 'male-d', tint: 0x2a2a30, acc: 'sunglasses' }
-    case 'staff': return { key: 'staff', file: 'male-c', tint: 0xffffff }
+    case 'staff': return { key: 'staff', file: 'male-c', tint: 0xffffff, prop: 'gloves' }
+    case 'bento': return { key: 'bento', file: 'male-f', tint: 0xd8dce4, prop: 'bento' }
+    case 'board': return { key: 'board', file: 'female-e', tint: 0xffffff, prop: 'board' }
+    case 'tourist': return { key: 'tourist', file: 'female-f', tint: 0xffffff, prop: 'suitcase' }
+    case 'lying': return { key: 'lying', file: 'male-d', tint: 0xd8dce4 }
     default: {
       const file = COMMUTER[n % COMMUTER.length]
       const shade = [0xffffff, 0xd8dce4, 0xc8ccd6, 0xe6e0d6][(n >> 4) % 4]
@@ -89,11 +93,33 @@ export class Person {
       ;(this.bones.torso || ch).add(g)
       this.bag = g
     }
+    // 持ち物（体の大きさの枠 lean に m 単位で付ける）
+    const PM = c => new THREE.MeshStandardMaterial({ color: c, roughness: 0.7 })
+    const add = (geo, mat, x, y, z, rx = 0, ry = 0, rz = 0) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.rotation.set(rx, ry, rz); this.lean.add(m); return m }
+    if (look.prop === 'bento') {   // 駅弁（ふたを開けて食べ続ける）
+      add(new THREE.BoxGeometry(0.3, 0.07, 0.22), PM(0x7a2a1e), 0, 0.78, 0.34)
+      add(new THREE.BoxGeometry(0.26, 0.02, 0.18), PM(0xf4f1e6), 0, 0.82, 0.34)
+      add(new THREE.BoxGeometry(0.08, 0.04, 0.06), PM(0xc77a2e), 0.06, 0.845, 0.32)
+      add(new THREE.CylinderGeometry(0.006, 0.006, 0.26, 4), PM(0xb98a52), -0.05, 0.93, 0.36, 0.6, 0, 0.3)
+    }
+    if (look.prop === 'board') {   // サーフボード（満員電車に持ち込む）
+      const b = add(new THREE.CapsuleGeometry(0.22, 1.5, 4, 12), PM(0x36b3b0), 0.32, 1.05, -0.18, 0, 0, 0.18); b.scale.set(1, 1, 0.18)
+      const st = add(new THREE.BoxGeometry(0.03, 1.5, 0.05), PM(0xffffff), 0.32, 1.05, -0.14, 0, 0, 0.18)
+    }
+    if (look.prop === 'suitcase') {   // スーツケース
+      add(new THREE.BoxGeometry(0.42, 0.55, 0.24), PM(0xc23b2b), 0.5, 0.34, 0)
+      add(new THREE.BoxGeometry(0.02, 0.3, 0.02), PM(0x333333), 0.42, 0.75, 0); add(new THREE.BoxGeometry(0.02, 0.3, 0.02), PM(0x333333), 0.58, 0.75, 0)
+      add(new THREE.BoxGeometry(0.18, 0.02, 0.02), PM(0x333333), 0.5, 0.9, 0)
+    }
+    if (look.prop === 'gloves') {   // 駅員の白手袋（大きめ）
+      for (const s of [-1, 1]) add(new THREE.SphereGeometry(0.11, 10, 8), PM(0xffffff), s * 0.42, 0.62, 0.12)
+    }
     this.mixer = new THREE.AnimationMixer(ch)
     this.acts = {}
-    for (const n of ['idle', 'walk', 'sit', 'emote-no', 'holding-both', 'crouch', 'attack-melee-right']) {
+    for (const n of ['idle', 'walk', 'sit', 'emote-no', 'holding-both', 'crouch', 'attack-melee-right', 'die']) {
       const c = A.clips[n]; if (!c) continue
       const a = this.mixer.clipAction(c); this.acts[n] = a
+      if (n === 'die') { a.setLoop(THREE.LoopOnce); a.clampWhenFinished = true }
     }
     this.cur = null; this.play('idle'); this.mixer.update(Math.random() * 2)
     this.acc = 0; this.fade = 1

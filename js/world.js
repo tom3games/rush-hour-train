@@ -1,7 +1,7 @@
 // 駅と電車の3D。素材は全部その場で描く（canvas の模様）。外部の画像は読まない
 // 盤面 px から m は S。ドアの中心が x=0、車両の壁（ドアの位置）が z=0、車内は z<0、ホームは z>0
 import * as THREE from 'three'
-import { CAR, GC, GH, WT, POLES } from './phys.js?v=2'
+import { CAR, GC, GH, WT, POLES } from './phys.js?v=3'
 
 export const S = 0.02   // 人（Kenney Mini を 1.45 倍）の横幅が盤面の肩幅 54px に合う縮尺
 export const wx = x => (x - GC) * S
@@ -100,10 +100,10 @@ export function buildWorld(scene, Q) {
   // ドア（2枚。開いている時は戸袋に入る）
   const doorT = cv(128, 256, (x, w, h) => {
     x.fillStyle = '#cfd3d6'; x.fillRect(0, 0, w, h); for (let i = 0; i < w; i += 3) { x.fillStyle = `rgba(255,255,255,${Math.random() * 0.1})`; x.fillRect(i, 0, 1, h) }
-    x.fillStyle = '#26323a'; x.fillRect(18, 34, w - 36, 92); x.fillStyle = 'rgba(255,255,255,.12)'; x.fillRect(22, 38, 30, 84)
+    x.clearRect(18, 34, w - 36, 92); x.fillStyle = 'rgba(40,55,65,.22)'; x.fillRect(18, 34, w - 36, 92); x.fillStyle = 'rgba(255,255,255,.18)'; x.fillRect(22, 38, 12, 84)   // 窓は透ける（閉まった後、押し付けられた顔が見える）
     x.fillStyle = '#e6c33a'; x.fillRect(20, 150, w - 40, 6)
   })
-  const doorM = M({ map: doorT, metalness: 0.4, roughness: 0.4 })
+  const doorM = M({ map: doorT, metalness: 0.4, roughness: 0.4, transparent: true, alphaTest: 0.05 })
   const mkDoor = s => { const g = new THREE.Group(); const d = box(DOOR_W, DOOR_H, 0.05, doorM, 0, DOOR_H / 2, 0, g); box(0.035, DOOR_H, 0.07, M({ color: 0x151515, roughness: 1 }), -s * DOOR_W / 2, DOOR_H / 2, 0, g); g.position.z = -0.03; train.add(g); return g }
   W.doorL = mkDoor(-1); W.doorR = mkDoor(1)
   W.setDoor = k => { W.doorL.position.x = -DOOR_W * 1.5 + DOOR_W * k; W.doorR.position.x = DOOR_W * 1.5 - DOOR_W * k }

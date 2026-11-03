@@ -24,3 +24,9 @@
 - snd/click.mp3: Interface Sounds / Kenney / CC0
 - assets/chars/*.glb: Kenney Mini Characters / Kenney / CC0（License-kenney.txt）
 - vendor/three.module.js ほか: three.js / MIT
+- snd/squeak1.mp3: Squeak toy sounds / bart / CC0
+- snd/squeak2.mp3: Squeak toy sounds / bart / CC0
+- snd/squeak3.mp3: Squeak toy sounds / bart / CC0
+- snd/boing1.mp3: 100 CC0 SFX / rubberduck / CC0
+- snd/boing2.mp3: 100 CC0 SFX / rubberduck / CC0
+- snd/clang.mp3: 75 CC0 breaking / falling / hit sfx / rubberduck / CC0

@@ -1,8 +1,8 @@
 // 満員電車に乗り込め。押し合いは phys.js（前作の 2D Verlet）、表示はここで three.js の斜め後ろ視点にする（v2。初版は主観）
 import * as THREE from 'three'
-import { World, T as PT, STEP, ROUND, CAR, GC, mid, botInput } from './phys.js?v=2'
-import { buildWorld, S, wx, wz } from './world.js?v=2'
-import { loadPeople, lookOf, Pool, Person, assets } from './people.js?v=2'
+import { World, T as PT, STEP, ROUND, CAR, GC, mid, botInput } from './phys.js?v=3'
+import { buildWorld, S, wx, wz } from './world.js?v=3'
+import { loadPeople, lookOf, Pool, Person, assets } from './people.js?v=3'
 
 const $ = id => document.getElementById(id)
 const TX = window.RH_TEXT, LINES = window.RH_LINES
@@ -58,6 +58,7 @@ Snd.def({
   step: ['snd/step1.mp3', 'snd/step2.mp3', 'snd/step3.mp3'],
   bell: 'snd/bell.mp3', doors: 'snd/doors.mp3', depart: 'snd/depart.mp3', chime: 'snd/chime.mp3',
   win: 'snd/win.mp3', lose: 'snd/lose.mp3', click: 'snd/click.mp3',
+  squeak: ['snd/squeak1.mp3', 'snd/squeak2.mp3', 'snd/squeak3.mp3'], boing: ['snd/boing1.mp3', 'snd/boing2.mp3'], clang: 'snd/clang.mp3',
 })
 Snd.setMute(muted)
 const sfx = (n, o) => Snd.play(n, o)
@@ -67,7 +68,7 @@ function audioOn() { Snd.init(); if (!ambOn) { ambOn = true; Snd.loop('amb', 'sn
 // ---------------------------------------------------------------- 状態
 let mode = 'loading', w = null, paused = false
 let hitStop = 0, fovKick = 0, shake = 0, flashA = 0, squeezeK = 0, camYaw = 0, glance = 0, knock = 0, pushedEver = false, moved = false
-let annText = '', annT = 0, hintShown = false, resultAt = 0, stepT = 0
+let annText = '', annT = 0, hintShown = false, resultAt = 0, stepT = 0, annSeq = null, annSeqT = 0
 const say = { el: $('say'), body: null, t: 0 }
 let testInput = null
 
@@ -135,7 +136,7 @@ function start(seed, opts) {
   audioOn()
   newWorld(seed, opts)
   mode = 'play'; paused = false; hitStop = fovKick = shake = flashA = squeezeK = knock = glance = 0; camYaw = 0; pushedEver = false; moved = false; resultAt = 0; hintShown = false
-  say.t = 0; say.body = null; say.el.classList.add('hidden'); annT = 0; $('fxFlash').classList.remove('red'); pushBuf = 0; setGrab(false)
+  say.t = 0; say.body = null; say.el.classList.add('hidden'); annT = 0; $('fxFlash').classList.remove('red'); pushBuf = 0; setGrab(false); annSeq = null; shoe.visible = false
   show(null); $('hud').classList.remove('hidden'); $('touch').classList.toggle('hidden', !coarse)
   announce('start', 2.6)
   sfx('click', { vol: 0.5 })
@@ -147,11 +148,11 @@ function onEvent(e) {
   switch (e.t) {
     case 'shove': {
       pushedEver = true
-      sfx('cloth', { vol: 0.9 }); sfx('grunt', { vol: 0.55, delay: 0.03 })
+      sfx('cloth', { vol: 0.9 }); sfx('grunt', { vol: 0.55, delay: 0.03 }); if (e.top) sfx('squeak', { vol: 0.45, jitter: 0.12 })   // むぎゅっ
       hitStop = Math.max(hitStop, 0.045); fovKick = -6; squeezeK = 1; shake = Math.max(shake, 0.12)
       const o = e.top
       if (o && o.sayCd <= 0) {
-        const always = o.type === 'dufu' || o.type === 'sleep' || o.type === 'pack' || o.type === 'perfume'
+        const always = ['dufu', 'sleep', 'pack', 'perfume', 'bento', 'board', 'tourist', 'lying'].includes(o.type)
         if (always || Math.random() < 0.55) { if (bubble(o, pickLine(o.type === 'player' ? 'commuter' : o.type, o.shoveSay = (o.shoveSay || 0) + o.id), o.type === 'dufu' ? 'dufu' : '')) o.sayCd = 150 }
       }
       break
@@ -164,7 +165,7 @@ function onEvent(e) {
       break
     }
     case 'release':
-      if (e.thrown) { sfx('thud', { vol: 0.8 }); sfx('grunt', { vol: 0.6, delay: 0.05 }); hitStop = Math.max(hitStop, 0.06); shake = Math.max(shake, 0.3); fovKick = -4 }
+      if (e.thrown) { e.target.tumble = 1; sfx('boing', { vol: 0.7 }); sfx('thud', { vol: 0.8, delay: 0.5 }); sfx('grunt', { vol: 0.6, delay: 0.05 }); hitStop = Math.max(hitStop, 0.06); shake = Math.max(shake, 0.3); fovKick = -4 }
       setGrab(false)
       break
     case 'grabFail':
@@ -176,14 +177,14 @@ function onEvent(e) {
     case 'staff': announce('staff', 2.4); sfx('step', { vol: 0.6 }); break
     case 'staffPush': if (w.staff) bubble(w.staff, pickLine('staff', w.step)); shake = Math.max(shake, 0.2); break
     case 'bell': Snd.play('bell', { vol: 0.75, offset: 1.9, jitter: 0 }); break
-    case 'closing': announce('closing', 3); sfx('chime', { vol: 0.6, jitter: 0 }); break
+    case 'closing': annSeq = TX[lang].ann.closingBroken.map((s, i) => [i * 0.8, s]); annSeqT = 0; sfx('chime', { vol: 0.6, jitter: 0 }); break   // 車内放送がだんだん崩れる
     case 'doorMove': sfx('doors', { vol: 0.8, offset: 0.65, jitter: 0 }); break
     case 'caught':
       announce('caught', 3.2)
       sfx('slam', { vol: 1 }); sfx('metal', { vol: 0.9, delay: 0.02 })
       hitStop = 0.14; shake = 1.1; flashA = 1; $('fxFlash').classList.add('red'); fovKick = 10; squeezeK = 1.4
       break
-    case 'eject': sfx('thud', { vol: 0.9 }); knock = 1; shake = Math.max(shake, 0.6); break
+    case 'eject': { sfx('thud', { vol: 0.9 }); knock = 1; shake = Math.max(shake, 0.6); const c = mid(w.player); shoe.visible = true; shoe.position.set(wx(c.x) + 0.75, 0.05, 0.4); shoe.rotation.y = 0.7; shoe.scale.setScalar(1.4); break }   // 靴が片方ホームに残る
     case 'closed':
       sfx('slam', { vol: 0.85 })
       if (e.in) { announce('inside', 2.2); hitStop = 0.1; shake = 0.6; flashA = 1; $('fxFlash').classList.remove('red'); fovKick = -7; glance = 0.001 }
@@ -238,6 +239,21 @@ function poseBody(b, p, dt, frozenOff) {
   p.lean.rotation.set(lx * Math.sin(ry) + lz * Math.cos(ry), 0, -(lx * Math.cos(ry) - lz * Math.sin(ry)))
   // ふらついている（投げられた・離された）人は大きく揺れる
   if (b.held > 4 && b !== w.player) p.lean.rotation.z += Math.sin(performance.now() / 110 + b.id) * 0.22
+  // 投げられた瞬間は大げさに吹っ飛ぶ（見た目だけ。計算上の位置は変えない）
+  if (b.tumble > 0) {
+    b.tumble = Math.max(0, b.tumble - dt * 1.3); const t = 1 - b.tumble
+    g.position.y += Math.sin(Math.PI * t) * 1.1
+    p.lean.rotation.x += t * Math.PI * 4
+    if (b.tumble === 0) { sfx('clang', { vol: 0.5 }); shake = Math.max(shake, 0.25) }
+  }
+  // つかまれている人はにゅーっと伸びる
+  const grabbed = w.player.grab && w.player.grab.target.body === b
+  // ドアが閉まった後、ドアの近くの人は窓にむぎゅっと押し付けられる（ドアの方を向く）
+  const squished = b.core[0].frozen && c.y > CAR.wall - 48 && Math.abs(c.x - GC) < 95
+  if (squished) { g.rotation.y = 0; g.position.y += 0.4; p.lean.rotation.set(0.1, 0, 0); p.lean.scale.set(1.25, 0.95, 0.45) }
+  else if (grabbed) { const k = Math.sin(performance.now() / 90) * 0.06; p.lean.scale.set(0.84 - k, 0.92 + k, 1.4) }
+  else p.lean.scale.set(1, 1, 1)
+  if (b.type === 'lying') { p.lean.rotation.set(-Math.PI / 2, 0, 0); g.position.y += 0.16 }
 }
 const _cp = new THREE.Vector3()
 function updatePeople(dt) {
@@ -252,8 +268,11 @@ function updatePeople(dt) {
     const gx = p.group.position.x - cx, gz = p.group.position.z - cz
     const t = (gx * sx + gz * sz) / sl2, lat = Math.abs(gx * sz - gz * sx) / Math.sqrt(sl2)
     let fade = 1
-    if (mode !== 'title' && t > -0.2 && t < 0.92 && lat < 0.75) fade = 0.2
-    if (gx * gx + gz * gz < 0.8) fade = 0
+    const riding = w.phase !== 'play' && w.player.outcome === 'in'   // 乗った後はホームから窓を映すので透かさない
+    if (!riding && mode !== 'title' && t > -0.2 && t < 0.92 && lat < 0.75) fade = 0.2
+    if (!riding && gx * gx + gz * gz < 0.8) fade = 0
+    // 乗った後、ホームにいてドアの窓の前をふさぐ人（駅員など）は消す
+    if (riding && !b.core[0].frozen && p.group.position.z > -0.1 && p.group.position.z < camera.position.z && Math.abs(p.group.position.x - camera.position.x) < 1.4) fade = 0
     p.setFade(fade)
     const sp = Math.hypot(b.vx, b.vy)
     if (b.kind === 'staff' && b.pushing) p.play('holding-both')
@@ -265,12 +284,20 @@ function updatePeople(dt) {
     p.acc += dt
     if ((pickN + b.id) % every === 0) { p.mixer.update(p.acc); p.acc = 0 }
     if (b.type === 'sleep' && p.bones.head) p.bones.head.rotation.x = 0.55 + Math.sin(performance.now() / 900) * 0.05
+    if (b.type === 'bento' && p.bones.head) p.bones.head.rotation.x = 0.35 + Math.abs(Math.sin(performance.now() / 260)) * 0.15   // 食べ続ける
   }
+  // 星
+  let ns = 0
+  for (const [b, p] of vis) if (b.held > 4 && b.tumble === 0 && p.fade > 0 && ns < STARS - 2) {
+    const tt = performance.now() / 260 + b.id
+    for (let k = 0; k < 3; k++) { const a = tt + k * 2.09; _sp.set(p.group.position.x + Math.cos(a) * 0.32, 1.62, p.group.position.z + Math.sin(a) * 0.32); _sq.setFromAxisAngle(_v.set(0, 1, 0), a * 2); _sm.compose(_sp, _sq, _ss); stars.setMatrixAt(ns++, _sm) }
+  }
+  stars.count = ns; stars.instanceMatrix.needsUpdate = true
   // 自分
   const me = w.player
   if (!meModel) { meModel = new Person({ key: 'me', file: 'female-b', tint: 0xffffff }, SXZ, SY); scene.add(meModel.group); meModel.group.add(meRing) }
   poseBody(me, meModel, dt, me.core[0].frozen ? off : 0)
-  meModel.group.visible = mode !== 'title'
+  meModel.group.visible = mode !== 'title'; if (w.phase === 'play') meRing.visible = true
   if (me.shoveAnim > 0) meModel.play('attack-melee-right', 0.05)
   else if (me.grab) meModel.play('holding-both', 0.12)
   else if (Math.hypot(me.vx, me.vy) > 0.4) meModel.play('walk')
@@ -283,6 +310,13 @@ function updatePeople(dt) {
   if (me.grab) { const c = mid(me.grab.target.body); grabRing.position.set(wx(c.x), 0.03, wz(c.y)); grabMark.position.set(wx(c.x), 1.85 + Math.sin(performance.now() / 120) * 0.04, wz(c.y)); grabMark.rotation.y += 0.05 }
 }
 let meModel = null
+// 挟まって脱げた靴
+const shoe = new THREE.Group(); shoe.visible = false; scene.add(shoe)
+{ const m = new THREE.MeshStandardMaterial({ color: 0x2a1f18, roughness: 0.5 }); const a = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.08, 0.28), m); a.position.y = 0.04; shoe.add(a); const b2 = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.06, 0.12), m); b2.position.set(0, 0.1, -0.08); shoe.add(b2) }
+// ふらついている人の頭のまわりを回る星（黄色の小さい八面体）
+const STARS = 36, stars = new THREE.InstancedMesh(new THREE.OctahedronGeometry(0.055), new THREE.MeshBasicMaterial({ color: 0xffd23a }), STARS)
+stars.frustumCulled = false; scene.add(stars)
+const _sm = new THREE.Matrix4(), _sq = new THREE.Quaternion(), _ss = new THREE.Vector3(1, 1, 1), _sp = new THREE.Vector3()
 const meRing = new THREE.Mesh(new THREE.RingGeometry(0.42, 0.55, 40).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0x2fd18a, transparent: true, opacity: 0.85, depthWrite: false, depthTest: false }))
 meRing.renderOrder = 20   // 人に隠れても自分の足もとが分かるように手前に描く
 meRing.position.y = 0.03
@@ -318,7 +352,13 @@ function updateCamera(dt) {
   const fx = -Math.sin(camYaw), fz = -Math.cos(camYaw)
   const port = asp < 1
   // 混むほど少し上から見下ろす。乗った後は引いて電車ごと見せる
-  const ride = w.phase !== 'play' && p.outcome === 'in' ? Math.min(1, w.departT / 120) : 0
+  const ride = 0
+  if (w.phase !== 'play' && p.outcome === 'in') {   // 乗れたら、ホームから閉まったドアの窓を映す（押し付けられた顔の余韻）
+    const tx = W.train.position.x
+    meRing.visible = false; _v.set(0, 1.45, asp < 1 ? 3.6 : 2.6); camPos.lerp(_v, 1 - Math.exp(-dt * 3)); camLook.lerp(_cp.set(tx * 0.85, 1.05, 0), 1 - Math.exp(-dt * 4))
+    camera.position.copy(camPos); if (shake > 0) camera.position.add(_v.set((Math.random() - 0.5) * shake * 0.1, (Math.random() - 0.5) * shake * 0.08, 0)); camera.lookAt(camLook)
+    camera.fov = asp >= 1 ? 46 : 64; camera.aspect = asp; camera.updateProjectionMatrix(); $('fxVig').style.opacity = '0'; return
+  }
   const back = (port ? 3.0 : 2.6) + ride * 1.6, up = (port ? 3.3 : 2.75) + Math.min(0.5, crowd * 0.025) + ride * 1.2 + knock * 0.6
   _v.set(px - fx * back, Math.min(4.2, up), pz - fz * back)
   const lk = _cp.set(px + fx * (port ? 1.0 : 1.4), 0.55, pz + fz * (port ? 1.0 : 1.4))
@@ -344,6 +384,7 @@ function updateCamera(dt) {
 // ---------------------------------------------------------------- 画面の文字
 function updateHud(dt) {
   const L = TX[lang]
+  if (annSeq) { annSeqT += dt; while (annSeq.length && annSeqT >= annSeq[0][0]) { announce(annSeq[0][1], 0.95); annSeq.shift() } if (!annSeq.length) annSeq = null }
   if (annT > 0) annT -= dt
   else if (mode === 'play' && !hintShown && w.step > 170 && !pushedEver) { hintShown = true; announce(coarse ? L.hintTouch : L.hintPc, 3.2) }
   const secs = Math.max(0, Math.ceil((ROUND - w.step) / 60))
@@ -396,7 +437,7 @@ function drawTicket() {
     x.fillStyle = '#fff'; x.font = F(900, 30); x.textBaseline = 'middle'; x.fillText(P.head, 28, 33)
     x.font = F(800, 18); x.textAlign = 'right'; x.fillText(ds, CW - 26, 34); x.textAlign = 'left'
     x.fillStyle = '#1b1b1b'; x.font = F(900, 44); x.fillText(P.route, 28, 116)
-    x.font = F(800, 20); x.fillStyle = '#2d3a33'; x.fillText(P.via, 30, 162); x.fillText(P.valid, 30, 192)
+    x.font = F(800, 20); x.fillStyle = '#2d3a33'; x.fillText(P.vias[(w.seed >>> 3) % P.vias.length], 30, 162); x.fillText(P.valid, 30, 192)
     x.fillText(P.shoves(r.shoves), 30, 222)
     x.fillStyle = '#16794f'; x.font = F(800, 22); x.fillText(P.rate, 30, 300)
     x.fillStyle = '#1b1b1b'; x.font = '400 92px "DotGothic16",monospace'; x.fillText(r.rate + '%', 120, 300)
@@ -412,6 +453,10 @@ function drawTicket() {
     lines.forEach((l, i) => x.fillText(l, 52, 140 + i * 32))
     const why = r.outcome === 'ejected' ? 'ejected' : (!moved && !r.shoves ? 'idle' : 'left')
     x.fillStyle = '#b8231c'; x.font = F(900, 22); x.fillText(C.why[why], 52, 150 + lines.length * 32 + 16)
+    // 毎回くじで、その回にいた変な客にちなんだ理由をもう1つ
+    const kinds = ['dufu', 'sleep', 'pack', 'perfume', 'bento', 'board', 'lying'].filter(k => w.bodies.some(b => b.type === k))
+    const pool2 = kinds.map(k => C.also[k]).concat(C.also.any), extra = pool2[(w.seed >>> 5) % pool2.length]
+    x.fillStyle = '#5a3a1a'; x.font = F(800, 19); x.fillText((lang === 'ja' ? 'ほか: ' : 'Also: ') + extra, 52, 150 + lines.length * 32 + 52)
     x.fillStyle = '#444'; x.font = F(800, 18); x.fillText(C.note, 52, CH - 66); x.fillText(ds, 52, CH - 40)
     stamp(CW - 104, CH - 92, C.stamp, 0.18)
   }
@@ -490,7 +535,7 @@ applyLang()
 
 // ---------------------------------------------------------------- 検証用の窓口
 window.rh = {
-  get mode() { return mode }, get w() { return w }, PT, camera, renderer, LOW, MAXV, THREE, W, get me() { return meModel }, get peopleShown() { return [...vis.values()] },
+  get mode() { return mode }, get w() { return w }, PT, camera, renderer, LOW, MAXV, THREE, W, get me() { return meModel }, get peopleShown() { return [...vis.values()] }, get starsN() { return stars.count }, get shoeShown() { return shoe.visible }, peopleOf: b => vis.get(b),
   start, toTitle, showResult, setLang: l => { lang = l; applyLang() }, get lang() { return lang },
   get visCount() { return vis.size }, get pool() { return pool.made },
   dbg: {

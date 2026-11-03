@@ -9,7 +9,7 @@ export const ROUND = 30 * 60                              // 30秒
 export const CLOSE_STEPS = 50                             // ドアが閉まり切るまで
 const DAMP = 0.84
 // 難しさの調整値（前作で bot の乗車率から決めた値。検証からも書き換える）
-export const T = { rowGap: 30, colGap: 38, doorZone: 200, fill: 0.85, npcIm: 0.6, homeK: 0.01, homeMax: 0.6, drift: 0, moveAcc: 0.5, sleepIm: 0.22, sleepK: 0.03, vipChance: 0.12, cap: 80, faceIn: 0.75, shoveF: 11, staffF: 0.7, dragAcc: 0.28, stunDrop: 90, stunThrow: 160 }   // shoveF・staffF は変な客込みで bot が前作並み（押す約6割・歩くだけ0）になるよう 2026-11-03 に調整
+export const T = { rowGap: 30, colGap: 38, doorZone: 200, fill: 0.85, npcIm: 0.6, homeK: 0.01, homeMax: 0.6, drift: 0, moveAcc: 0.5, sleepIm: 0.22, sleepK: 0.03, vipChance: 0.12, cap: 80, faceIn: 0.75, shoveF: 11, staffF: 0.7, lyingChance: 0.07, dragAcc: 0.28, stunDrop: 90, stunThrow: 160 }   // shoveF・staffF は変な客込みで bot が前作並み（押す約6割・歩くだけ0）になるよう 2026-11-03 に調整
 
 const STATIC = [
   { x0: -200, y0: -200, x1: W + 200, y1: CAR.t },
@@ -22,6 +22,7 @@ const STATIC = [
   { x0: -200, y0: -200, x1: 0, y1: H + 200 },
   { x0: W, y0: -200, x1: W + 200, y1: H + 200 },
 ]
+const opts_lying = w => w.forceLying
 export const POLES = [{ x: GC - 120, y: CAR.wall - 70, r: 7 }, { x: GC + 120, y: CAR.wall - 70, r: 7 }]
 
 export function mulberry32(a) {
@@ -46,6 +47,7 @@ export class World {
     this.result = null
     this.forceVip = opts.vip
     this.forceNoSpecial = opts.noSpecial
+    this.forceLying = opts.lying
     this.build()
   }
   rnd(a, b) { return a + (b - a) * this.rng() }
@@ -106,12 +108,19 @@ export class World {
     const no = this.forceNoSpecial   // 検証用: true で変な客なし
     if (no !== true && no !== 'sleep') swap('sleep', 0.75)
     if (no !== true && no !== 'pack') { swap('pack', 0.85); swap('pack', 0.4) }
-    if (no !== true) { swap('dufu', 0.7); swap('perfume', 0.65) }
+    if (no !== true) { swap('dufu', 0.7); swap('perfume', 0.65); swap('bento', 0.5); swap('board', 0.35) }
     // ホームから一緒に乗り込む客
     for (let i = 0; i < 2; i++) {
       const side = i === 0 ? -1 : 1
       const b = this.makePerson(GC + side * this.rnd(160, 300), CAR.wall + this.rnd(110, 210), -Math.PI / 2, 'rival', 'rival')
       b.look = Math.floor(this.rng() * 1000)
+      if (i === 1 && this.rng() < 0.5) b.type = 'tourist'   // スーツケースの観光客（見た目と言葉だけ）
+    }
+    // レア: ドアの前のホームで寝そべる人（重くて動かない障害物）
+    if (no !== true && (opts_lying(this) ?? this.rng() < T.lyingChance)) {
+      const b = this.makePerson(GC + this.rnd(-45, 45), CAR.wall + 62, 0, 'npc', 'lying')
+      for (const q of b.all) q.im = T.sleepIm
+      this.lying = b
     }
     // レア: 全員がよけて道ができる謎の人
     const vip = this.forceVip != null ? this.forceVip : this.rng() < T.vipChance
@@ -255,7 +264,7 @@ export class World {
       if (q.frozen || Math.hypot(g.hand.x - q.x, g.hand.y - q.y) > 46) this.releaseGrab(b, false)
       else {
         b.grabT++
-        const heavy = q.body.type === 'sleep'
+        const heavy = q.body.type === 'sleep' || q.body.type === 'lying'
         if (!heavy) q.body.held = 3   // つかまれている間は踏ん張れない（寝ている人は重くて動かない）
         const k = heavy ? T.dragAcc * 0.12 : T.dragAcc
         if (len > 0.2) for (const p of q.body.core) { p.ax += x * k; p.ay += y * k }
@@ -283,10 +292,10 @@ export class World {
   releaseGrab(b, throwIt) {
     const g = b.grab; if (!g) return
     const i = this.cons.indexOf(g.con); if (i >= 0) this.cons.splice(i, 1)
-    const tb = g.target.body, thrown = throwIt && b.grabT > 8 && !g.target.frozen && tb.type !== 'sleep'
+    const tb = g.target.body, heavyT = tb.type === 'sleep' || tb.type === 'lying', thrown = throwIt && b.grabT > 8 && !g.target.frozen && !heavyT
     if (thrown) { for (const p of tb.all) { if (p.frozen) continue; p.x += b.dir.x * 8; p.y += b.dir.y * 8 } b.throws = (b.throws || 0) + 1 }
     // 離された客はしばらくふらつく。ホームに出された客は立ち直ってから乗り直しに来る
-    if (!g.target.frozen && tb.type !== 'sleep') {
+    if (!g.target.frozen && !heavyT) {
       tb.held = thrown ? T.stunThrow : T.stunDrop
       if (tb.kind === 'npc' && mid(tb).y > CAR.wall + 5) { tb.kind = 'rival'; tb.held = Math.max(tb.held, T.stunThrow); tb.out = true }
     }
@@ -303,13 +312,14 @@ export class World {
       const c = mid(b)
       if (b.held > 0) { b.held--; continue }
       if (b.kind === 'npc') {
-        const k = b.type === 'sleep' ? T.sleepK : T.homeK, mx = b.type === 'sleep' ? T.homeMax * 2 : T.homeMax
+        const heavy = b.type === 'sleep' || b.type === 'lying'
+        const k = heavy ? T.sleepK : T.homeK, mx = heavy ? T.homeMax * 2 : T.homeMax
         let ax = (b.home.x - c.x) * k, ay = (b.home.y - c.y) * k
         const m = Math.hypot(ax, ay); if (m > mx) { ax *= mx / m; ay *= mx / m }
         for (const p of b.core) { p.ax += ax; p.ay += ay }
-        if (b.home.y > CAR.wall - 20) b.home.y = CAR.wall - 40   // ホームに押し出されたら戻ろうとする
+        if (b.home.y > CAR.wall - 20 && b.type !== 'lying') b.home.y = CAR.wall - 40   // ホームに押し出されたら戻ろうとする
         // 謎の人が近づくと、みんなが左右に身を引いて道を空ける
-        if (vip && vip.walking && b.type !== 'sleep') {
+        if (vip && vip.walking && !heavy) {
           const v = mid(vip), dx = c.x - v.x, dy = c.y - v.y
           if (dy < 30 && dy > -150 && Math.abs(dx) < 70) {
             const s = dx === 0 ? (b.id % 2 ? 1 : -1) : Math.sign(dx)
