@@ -1,4 +1,5 @@
 // SNS 用の画像 og.png（1200x630）。押し合いの一番近い場面を撮って、右に駅名標風のタイトルを重ねる。node og.mjs
+import './mute-auto.mjs'  // テスト中は絶対に音を出さない（playwright を無音に差し替え）
 import { chromium } from 'playwright'
 import { spawn } from 'node:child_process'
 import { MUTE_LAUNCH, muteContext } from './mute.mjs'

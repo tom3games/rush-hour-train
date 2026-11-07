@@ -1,3 +1,4 @@
+import './mute-auto.mjs'  // テスト中は絶対に音を出さない（playwright を無音に差し替え）
 import { MUTE_LAUNCH, muteContext } from './mute.mjs'
 // 自分で壊す検証。node verify.mjs（音は出さない）
 import { chromium, webkit } from 'playwright'

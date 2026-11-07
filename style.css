@@ -111,3 +111,10 @@ button,a{font-family:inherit;color:inherit;background:none;border:0;cursor:point
 @media (max-height:700px) and (orientation:portrait){
   .sub{font-size:14px}
 }
+/* 支援ボタン（共通 support.js）は #result の直下に入る。横長では3列目になってはみ出すので、ボタンの列の下に置く */
+@media (max-height:560px) and (orientation:landscape){
+  #result{display:grid;grid-template-columns:auto auto;grid-template-rows:1fr auto auto 1fr;column-gap:18px;row-gap:0;justify-content:center;align-items:center}
+  #result>#ticket{grid-column:1;grid-row:1/5}
+  #result>.result-actions{grid-column:2;grid-row:2}
+  #result>#tmSupport{grid-column:2;grid-row:3}
+}

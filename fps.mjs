@@ -1,4 +1,5 @@
 // 遊び中の fps。スマホ相当（390x844・タッチ・LOW 設定）で、CPU を絞らない時と4倍遅くした時を測る。node fps.mjs
+import './mute-auto.mjs'  // テスト中は絶対に音を出さない（playwright を無音に差し替え）
 import { chromium, webkit } from 'playwright'
 import { spawn, execSync } from 'node:child_process'
 import { MUTE_LAUNCH, muteContext } from './mute.mjs'
